@@ -1,14 +1,14 @@
 
 import './App.css'
 import Nav from './components/Nav';
-import Home from "./pages/tracker";
+import Tracker from "./pages/Tracker";
 
 function App() {
 
   return (
-    <div className='bg-color-red'>
+    <div className='font-fredoka flex flex-col h-full w-full'>
       <Nav/>
-      <Home />
+      <Tracker />
     </div>
   )
 }

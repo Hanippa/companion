@@ -1,1 +1,14 @@
+@font-face {
+  font-family: Fredoka;
+  src: url(./assets/fonts/Fredoka-Regular.ttf);
+}
 @import "tailwindcss";
+@layer base {
+  html {
+    @apply h-full;
+  }
+}
+
+@theme{
+  --font-fredoka: Fredoka , "sans-serif";
+}
