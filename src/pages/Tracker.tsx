@@ -1,6 +1,8 @@
 
 import Tracking from '../components/Tracking';
 import Technician from '../components/Technician';
+import Summary from '../components/Summary';
+import Info from '../components/Info';
 
 export default function Tracker() {
   return (
@@ -12,16 +14,8 @@ export default function Tracker() {
     </div>
 
     <div className="md:w-2/6 w-full md:h-full h-20 flex flex-col gap-3 md:gap-4 ">
-      <div className="w-full  h-full md:h-1/6 bg-white rounded-xl">
-        <div className="text-2xl" dir="rtl">
-        אייפון 15 פרו מקס
-        </div>
-        <div className="text-2xl" dir="rtl">
-        מסך שבור + בעיית שמע +...         </div>
-      </div>
-      <div className="w-full md:h-5/6 bg-white hidden md:block rounded-xl">
-        extra information
-      </div>
+<Summary/>
+<Info/>
     </div>
   </div>
   );
