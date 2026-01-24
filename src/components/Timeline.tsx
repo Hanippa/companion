@@ -1,7 +1,13 @@
+import infoIcon from "../assets/InfoIcon.png";
+import { useState } from "react";
+import BottomSheet from "../components/BottomSheet";
+
+
 type TimelineItem = {
   title: string;
   description: string;
   highlighted?: boolean;
+  info?:boolean;
 };
 
 const items: TimelineItem[] = [
@@ -9,25 +15,32 @@ const items: TimelineItem[] = [
     title: "מכשירך הופקד בסניף דיזנגוף סנטר",
     description: "15/1   בשעה - 9:15",
     highlighted: false,
+    info :false,
   },
   {
     title: "מכשירך נכנס למעבדת תיקונים ",
     description: "15/1   בשעה - 9:18",
     highlighted: false,
+    info :false,
   },
   {
     title: "מכשירך נשלח לתיקון מעבדה ארצית",
     description: "15/1   בשעה - 9:20",
     highlighted: true,
+    info :true,
   },
   {
     title: "התחלת תיקון המכשיר",
     description: "",
     highlighted: false,
+    info :false,
   },
 ];
 
 export default function Timeline() {
+
+    const [open, setOpen] = useState(false);
+
   return (
     <div className="h-full w-full relative" dir="rtl">
       {/* Vertical line */}
@@ -51,6 +64,7 @@ export default function Timeline() {
 
             {/* Content */}
             <div className="pr-8">
+              <div className="flex justify-start items-center">
               <h3 className={`
                   ${isActive
                     ? "text-xl md:text-2xl text-black"
@@ -58,6 +72,8 @@ export default function Timeline() {
                 `}>
                 {item.title}
               </h3>
+              {item.info ? <img onClick={() => setOpen(true)} className="w-6 h-6 mr-4" src={infoIcon} alt=""/> : ""}
+              </div>
               <p className={`
                   ${isActive
                     ? "text-md md:text-xl text-black"
@@ -65,10 +81,12 @@ export default function Timeline() {
                 `}>
                 {item.description}
               </p>
+            
             </div>
           </li>
         )})}
       </ul>
+      <BottomSheet open={open} onClose={() => setOpen(false)} />
     </div>
   );
 }
