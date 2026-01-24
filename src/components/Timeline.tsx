@@ -53,15 +53,15 @@ export default function Timeline() {
             <div className="pr-8">
               <h3 className={`
                   ${isActive
-                    ? "text-2xl text-black"
-                    : "text-2xl text-gray-400"}
+                    ? "text-xl md:text-2xl text-black"
+                    : "text-xl md:text-2xl text-gray-400"}
                 `}>
                 {item.title}
               </h3>
               <p className={`
                   ${isActive
-                    ? "text-xl text-black"
-                    : "text-xl text-gray-400"}
+                    ? "text-md md:text-xl text-black"
+                    : "text-md md:text-xl text-gray-400"}
                 `}>
                 {item.description}
               </p>

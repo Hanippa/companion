@@ -4,7 +4,7 @@ import TechIcon from "../assets/TechIcon.png"
 
 
 const handleCall = () => {
-  window.open('tel:900300400');
+  window.open('tel:*6656');
 };
 export default function Technician() {
   return (
