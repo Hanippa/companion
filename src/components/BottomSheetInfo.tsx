@@ -32,7 +32,7 @@ export default function BottomSheetInfo({ open, onClose }: BottomSheetProps) {
       >
         <div className="mx-auto max-w-lg rounded-t-2xl bg-white p-6 shadow-xl">
           {/* Drag handle */}
-          <div onClick={onClose} className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-black" />
+          <div onClick={onClose} className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-dyellow" />
 <ul className="flex w-full h-full flex-col justify-around pb-4">
     <li className="border-b-2 border-gray-200">
         <div className="flex justify-end items-center">
@@ -70,7 +70,7 @@ export default function BottomSheetInfo({ open, onClose }: BottomSheetProps) {
           <img className="w-6 m-4" src={DateIcon} alt="" />
         </div>
       </li>
-      <li className="border-b-2 border-gray-200 ">
+      <li className="">
         <div className="flex justify-end items-center">
           <div className="flex flex-col items-end">
           <div dir="rtl" className="text-xl md:text-3xl">מרכז שירות דיזנגוף</div>
@@ -89,7 +89,7 @@ export default function BottomSheetInfo({ open, onClose }: BottomSheetProps) {
 
           <button
             onClick={onClose}
-            className="mt-6 w-full rounded-md px-4 py-2 text-slate-900 bg-slate-200"
+            className="mt-6 text-md w-full rounded-md px-4 py-2 text-black bg-gray-100"
           >
             סגור
           </button>

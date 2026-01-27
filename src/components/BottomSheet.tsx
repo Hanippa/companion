@@ -4,7 +4,18 @@ type BottomSheetProps = {
   onClose: () => void;
 };
 
+
+
 export default function BottomSheet({ open, onClose }: BottomSheetProps) {
+
+  const handleWhatsapp = () => {
+  window.open('https://api.whatsapp.com/send?phone=972522027185');
+};
+  const handleCallSupport = () => {
+  window.open('tel:*6656');
+};
+
+
   return (
     <>
       {/* Backdrop */}
@@ -24,7 +35,7 @@ export default function BottomSheet({ open, onClose }: BottomSheetProps) {
       >
         <div className="mx-auto max-w-lg rounded-t-2xl bg-white p-6 shadow-xl">
           {/* Drag handle */}
-          <div onClick={onClose} className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-black" />
+          <div onClick={onClose} className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-dyellow" />
 
           <h2 dir="rtl" className="text-3xl font-semibold text-black">
             שליחה למעבדה ארצית
@@ -42,15 +53,15 @@ export default function BottomSheet({ open, onClose }: BottomSheetProps) {
           <div className=" p-4 flex justify-between items-center w-full h-24 bg-gray-100 rounded-lg mt-6">
             <div className="flex flex-col items-start">
             <div>יש עוד שאלות?</div>
-            <div>אנחנו זמינים לרשתוך ב*6656</div>
-            <div>או בוואצאפ ב052-2027185</div>
+            <div onClick={handleCallSupport}>אנחנו זמינים לרשתוך ב*6656</div>
+            <div className="" onClick={handleWhatsapp} >או בוואצאפ ב052-2027185</div>
             </div>
             <img className="w-16 h-18" src={SupportIcon}/>
           </div>
 
           <button
             onClick={onClose}
-            className="mt-6 w-full rounded-md px-4 py-2 text-slate-900 bg-red"
+            className="mt-6 w-full rounded-md px-4 py-2 text-black bg-gray-100"
           >
             סגור
           </button>
