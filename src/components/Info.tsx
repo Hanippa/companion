@@ -48,7 +48,7 @@ export default function Info() {
           <img className="w-6 m-4" src={DateIcon} alt="" />
         </div>
       </li>
-      <li className="border-b-2 border-gray-200 ">
+      <li className=" ">
         <div className="flex justify-end items-center">
           <div className="flex flex-col items-end">
           <div dir="rtl" className="text-xl md:text-2xl">מרכז שירות דיזנגוף</div>
