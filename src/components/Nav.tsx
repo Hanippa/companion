@@ -12,7 +12,7 @@ export default function Nav() {
             <div className="hidden md:block text-2xl">Demo</div>
           </div>
           
-          <div className="text-2xl flex justify-end w-5/6 gap-2"> <div className="font-bold">19874374</div>: תיקון מספר</div>
+          <div className=" whitespace-nowrap text-xl md:text-2xl flex justify-end w-5/6 gap-2"> <div className="font-bold">19874374</div>: תיקון מספר</div>
           
         </div>
 

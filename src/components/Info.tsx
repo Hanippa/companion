@@ -1,4 +1,4 @@
-import PersonIcon from "../assets/PersonIcon.png"
+import SimIcon from "../assets/SimIcon.png"
 import DateIcon from "../assets/DateIcon.png"
 import RepairIcon from "../assets/RepairIcon.png"
 import ProtectIcon from "../assets/ProtectIcon.png"
@@ -11,18 +11,18 @@ export default function Info() {
   return (
     <div className="w-full md:h-5/6 p-4 bg-white hidden md:flex md:flex-col items-end rounded-xl">
       <div dir="rtl" className="text-4xl m-4">מידע מורחב</div>
-    <ul className="flex w-full h-full flex-col justify-around pb-14">
-    <li className="ring-1 ring-gray-100 rounded-md p-4">
+    <ul className="flex w-full h-full flex-col justify-around pb-4">
+    <li className="border-b-2 border-gray-200">
         <div className="flex justify-end items-center">
         
-          <div dir="rtl" className="text-3xl">FIX 42 שירות תיקונים</div>
+          <div dir="rtl" className="text-xl md:text-2xl">FIX 42 שירות תיקונים</div>
           <img className="w-6 m-4" src={ProtectIcon} alt="" />
         </div>
       </li>
-      <li className="ring-1 ring-gray-100 rounded-md p-4">
+      <li className="border-b-2 border-gray-200 ">
       <div className="flex justify-end items-center">
           <div className="flex flex-col items-end">
-          <div className="text-3xl flex items-center justify-end">אייפון 15 פרו מקס <img className="w-6 m-4" src={RepairIcon} alt="" /></div>
+          <div className="text-xl md:text-2xl flex items-center justify-end">אייפון 15 פרו מקס <img className="w-6 m-4" src={RepairIcon} alt="" /></div>
           <div className="flex flex-col justify-end items-end gap-2">
           <div dir="rtl" className="text-md text-gray-400 pr-12">- מסך שבור </div>
           <div dir="rtl" className="text-md text-gray-400 pr-12">- בעיות שמע </div>
@@ -35,23 +35,23 @@ export default function Info() {
           
         </div>
       </li>
-      <li className="ring-1 ring-gray-100 rounded-md p-4">
+      <li className="border-b-2 border-gray-200">
         <div className="flex justify-end items-center">
           
-          <div dir="rtl" className="text-3xl">נעמה ווינשטיין </div>
-          <img className="w-6 m-4" src={PersonIcon} alt="" />
+          <div dir="rtl" className="text-xl md:text-2xl">356303483147250</div>
+          <img className="w-6 m-4" src={SimIcon} alt="" />
         </div>
       </li>
-      <li className="ring-1 ring-gray-100 rounded-md p-4">
+      <li className="border-b-2 border-gray-200 ">
         <div className="flex justify-end items-center">
-          <div className="text-3xl">15/01/2026 - 9:15</div>
+          <div className="text-xl md:text-2xl">15/01/2026 - 9:15</div>
           <img className="w-6 m-4" src={DateIcon} alt="" />
         </div>
       </li>
-      <li className="ring-1 ring-gray-100 rounded-md p-4">
+      <li className="border-b-2 border-gray-200 ">
         <div className="flex justify-end items-center">
           <div className="flex flex-col items-end">
-          <div dir="rtl" className="text-3xl">מרכז שירות דיזנגוף</div>
+          <div dir="rtl" className="text-xl md:text-2xl">מרכז שירות דיזנגוף</div>
           <div className="flex gap-2">
           <img onClick={handleNavigate} className="w-6 h-6 cursor-pointer" src={WazeIcon} alt="" />
             <div onClick={handleNavigate} className="flex cursor-pointer" dir="rtl">נווט בwaze </div>

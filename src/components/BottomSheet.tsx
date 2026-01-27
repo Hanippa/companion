@@ -24,7 +24,7 @@ export default function BottomSheet({ open, onClose }: BottomSheetProps) {
       >
         <div className="mx-auto max-w-lg rounded-t-2xl bg-white p-6 shadow-xl">
           {/* Drag handle */}
-          <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-black" />
+          <div onClick={onClose} className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-black" />
 
           <h2 dir="rtl" className="text-3xl font-semibold text-black">
             שליחה למעבדה ארצית
@@ -50,7 +50,7 @@ export default function BottomSheet({ open, onClose }: BottomSheetProps) {
 
           <button
             onClick={onClose}
-            className="mt-6 w-full rounded-md bg-white px-4 py-2 text-slate-900 hover:bg-slate-200"
+            className="mt-6 w-full rounded-md px-4 py-2 text-slate-900 bg-red"
           >
             סגור
           </button>

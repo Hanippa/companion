@@ -1,4 +1,4 @@
-import PersonIcon from "../assets/PersonIcon.png"
+import SimIcon from "../assets/SimIcon.png"
 import DateIcon from "../assets/DateIcon.png"
 import RepairIcon from "../assets/RepairIcon.png"
 import ProtectIcon from "../assets/ProtectIcon.png"
@@ -32,16 +32,16 @@ export default function BottomSheetInfo({ open, onClose }: BottomSheetProps) {
       >
         <div className="mx-auto max-w-lg rounded-t-2xl bg-white p-6 shadow-xl">
           {/* Drag handle */}
-          <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-black" />
-<ul className="flex w-full h-full flex-col justify-around pb-14">
-    <li className="border-b-2 border-gray-200 p-4">
+          <div onClick={onClose} className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-black" />
+<ul className="flex w-full h-full flex-col justify-around pb-4">
+    <li className="border-b-2 border-gray-200">
         <div className="flex justify-end items-center">
         
           <div dir="rtl" className="text-xl md:text-3xl">FIX 42 שירות תיקונים</div>
           <img className="w-6 m-4" src={ProtectIcon} alt="" />
         </div>
       </li>
-      <li className="border-b-2 border-gray-200 p-4">
+      <li className="border-b-2 border-gray-200 ">
       <div className="flex justify-end items-center">
           <div className="flex flex-col items-end">
           <div className="text-xl md:text-3xl flex items-center justify-end">אייפון 15 פרו מקס <img className="w-6 m-4" src={RepairIcon} alt="" /></div>
@@ -57,20 +57,20 @@ export default function BottomSheetInfo({ open, onClose }: BottomSheetProps) {
           
         </div>
       </li>
-      <li className="border-b-2 border-gray-200 p-4">
+      <li className="border-b-2 border-gray-200">
         <div className="flex justify-end items-center">
           
-          <div dir="rtl" className="text-xl md:text-3xl">נעמה ווינשטיין </div>
-          <img className="w-6 m-4" src={PersonIcon} alt="" />
+          <div dir="rtl" className="text-xl md:text-3xl">356303483147250</div>
+          <img className="w-6 m-4" src={SimIcon} alt="" />
         </div>
       </li>
-      <li className="border-b-2 border-gray-200 p-4">
+      <li className="border-b-2 border-gray-200 ">
         <div className="flex justify-end items-center">
           <div className="text-xl md:text-3xl">15/01/2026 - 9:15</div>
           <img className="w-6 m-4" src={DateIcon} alt="" />
         </div>
       </li>
-      <li className="border-b-2 border-gray-200 p-4">
+      <li className="border-b-2 border-gray-200 ">
         <div className="flex justify-end items-center">
           <div className="flex flex-col items-end">
           <div dir="rtl" className="text-xl md:text-3xl">מרכז שירות דיזנגוף</div>
@@ -89,7 +89,7 @@ export default function BottomSheetInfo({ open, onClose }: BottomSheetProps) {
 
           <button
             onClick={onClose}
-            className="mt-6 w-full rounded-md bg-white px-4 py-2 text-slate-900 hover:bg-slate-200"
+            className="mt-6 w-full rounded-md px-4 py-2 text-slate-900 bg-slate-200"
           >
             סגור
           </button>
