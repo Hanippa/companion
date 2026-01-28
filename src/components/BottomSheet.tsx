@@ -37,11 +37,11 @@ export default function BottomSheet({ open, onClose }: BottomSheetProps) {
           {/* Drag handle */}
           <div onClick={onClose} className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-dyellow" />
 
-          <h2 dir="rtl" className="text-3xl font-semibold text-black">
+          <h2 dir="rtl" className="text-2xl md:text-3xl font-semibold text-black">
             שליחה למעבדה ארצית
           </h2>
 
-          <p  dir="rtl" className="mt-2 text-xl text-gray-400">
+          <p  dir="rtl" className="mt-2 text-lg md:text-xl text-gray-400">
            המכשיר שלך זקוק לטיפול מקיף ומורכב, 
 אבל לא לדאוג... המכשיר יתוקן באופן מקצועי
 במעבדה הארצית שלנו.

@@ -12,14 +12,14 @@ export default function Info() {
     <div className="w-full md:h-5/6 p-4 bg-white hidden md:flex md:flex-col items-end rounded-xl">
       <div dir="rtl" className="text-4xl m-4">מידע מורחב</div>
     <ul className="flex w-full h-full flex-col justify-around pb-4">
-    <li className="border-b-2 border-gray-200">
+    <li className="border-b-2 border-gray-100">
         <div className="flex justify-end items-center">
         
           <div dir="rtl" className="text-xl md:text-2xl">FIX 42 שירות תיקונים</div>
           <img className="w-6 m-4" src={ProtectIcon} alt="" />
         </div>
       </li>
-      <li className="border-b-2 border-gray-200 ">
+      <li className="border-b-2 border-gray-100 ">
       <div className="flex justify-end items-center">
           <div className="flex flex-col items-end">
           <div className="text-xl md:text-2xl flex items-center justify-end">אייפון 15 פרו מקס <img className="w-6 m-4" src={RepairIcon} alt="" /></div>
@@ -35,14 +35,14 @@ export default function Info() {
           
         </div>
       </li>
-      <li className="border-b-2 border-gray-200">
+      <li className="border-b-2 border-gray-100">
         <div className="flex justify-end items-center">
           
           <div dir="rtl" className="text-xl md:text-2xl">356303483147250</div>
           <img className="w-6 m-4" src={SimIcon} alt="" />
         </div>
       </li>
-      <li className="border-b-2 border-gray-200 ">
+      <li className="border-b-2 border-gray-100 ">
         <div className="flex justify-end items-center">
           <div className="text-xl md:text-2xl">15/01/2026 - 9:15</div>
           <img className="w-6 m-4" src={DateIcon} alt="" />
