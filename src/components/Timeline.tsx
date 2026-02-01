@@ -62,8 +62,8 @@ export default function Timeline() {
               <div className="flex justify-start items-center">
               <h3 className={`
                   ${isActive
-                    ? "text-lg md:text-2xl text-black"
-                    : "text-lg md:text-2xl text-gray-400"}
+                    ? "text-md md:text-2xl text-black"
+                    : "text-md md:text-2xl text-gray-400"}
                 `}>
                 {item.title}
               </h3>
