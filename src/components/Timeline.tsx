@@ -11,12 +11,7 @@ type TimelineItem = {
 };
 
 const items: TimelineItem[] = [
-  {
-    title: "מכשירך הופקד בסניף דיזנגוף סנטר",
-    description: "15/1   בשעה - 9:15",
-    highlighted: false,
-    info :false,
-  },
+
   {
     title: "מכשירך נכנס למעבדת תיקונים ",
     description: "15/1   בשעה - 9:18",
@@ -59,7 +54,7 @@ export default function Timeline() {
             <div className={`
                   ${isActive
                     ? "absolute right-0 top-2 h-6 w-6 rounded-sm bg-dyellow"
-                    : "absolute right-0 top-2 h-6 w-6 rounded-sm bg-white border-2 border-gray-100"}
+                    : "absolute right-0 top-2 h-6 w-6 rounded-sm bg-white  border-2 border-gray-100"}
                 `} />
 
             {/* Content */}
