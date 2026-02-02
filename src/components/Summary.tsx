@@ -5,7 +5,7 @@ import BottomSheetInfo from "../components/BottomSheetInfo";
 export default function Summary() {
     const [open, setOpen] = useState(false);
   return (
-    <div  onClick={() => {setOpen(true)}} className="flex items-center justify-end w-full  h-full md:h-1/6 bg-white opacity-90 opac rounded-2xl p-4">
+    <div  onClick={() => {setOpen(true)}} className="flex items-center justify-end w-full  h-full md:h-1/6 bg-white/90 opac rounded-2xl p-4">
     <div className="">
     <div className="text-xl md:text-2xl" dir="rtl">
     אייפון 15 פרו מקס

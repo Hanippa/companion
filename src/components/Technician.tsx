@@ -8,7 +8,7 @@ const handleCall = () => {
 };
 export default function Technician() {
   return (
-<div className=" flex justify-center items-center w-full h-20 md:h-32 bg-white opacity-90 rounded-2xl p-4">
+<div className=" flex justify-center items-center w-full h-20 md:h-32 bg-white/90 rounded-2xl p-4">
   <div onClick={handleCall} className="flex flex-col md:flex-row  justify-center md:justify-start md:items-center w-1/4 cursor-pointer ">
   <img className="ml-4 w-8 h-8 md:w-14 md:h-14" src={ContactIcon} alt="contact icon" />
   <div className="text-md md:text-2xl cursor-pointer ">צור קשר</div>

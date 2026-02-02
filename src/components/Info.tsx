@@ -9,7 +9,7 @@ const handleNavigate = () => {
 };
 export default function Info() {
   return (
-    <div className="w-full md:h-5/6 p-4 bg-white opacity-90 hidden md:flex md:flex-col items-end rounded-2xl">
+    <div className="w-full md:h-5/6 p-4 bg-white/90 hidden md:flex md:flex-col items-end rounded-2xl">
       <div dir="rtl" className="text-4xl m-4">מידע מורחב</div>
     <ul className="flex w-full h-full flex-col justify-around pb-4">
     <li className="border-b-2 border-gray-100">
