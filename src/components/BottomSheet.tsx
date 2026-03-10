@@ -21,7 +21,7 @@ export default function BottomSheet({ open, onClose }: BottomSheetProps) {
       {/* Backdrop */}
       <div
         onClick={onClose}
-        className={`fixed inset-0 bg-black/50 transition-opacity duration-300
+        className={`fixed z-0 inset-0 bg-black/50 transition-opacity duration-300
           ${open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}
         `}
       />
