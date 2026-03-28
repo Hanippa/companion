@@ -5,10 +5,10 @@ import './App.css'
 import Footer from './components/Footer';
 import Nav from './components/Nav';
 import Tracker from "./pages/Tracker";
-import LoginPage from "./pages/LoginPage";
 import AccessibilityIcon from "./assets/AccessibilityIcon.png"
 import { useAuth } from "./contexts/AuthContext"
 import { supabase } from './lib/supabase'
+import LoginPage from "./pages/LoginPage";
 
 
 function App() {
@@ -110,7 +110,7 @@ const [allusers , setAllusers] = useState<any[]>([])
       <Footer/>
     </div>
         } />
-        <Route path="/login" element={<LoginPage />} />
+        <Route path="/login" element={<div className='flex justify-center items-center h-full w-full'><LoginPage/></div>} />
       </Routes>
     </BrowserRouter>
   )
