@@ -1,10 +1,26 @@
-import * as React from "react"
+import { useEffect, useState } from "react"
+import { Link } from "react-router-dom"
+import {
+  BarChart3Icon,
+  CircleHelpIcon,
+  LayoutDashboardIcon,
+  RouteIcon,
+  SearchIcon,
+  UserRoundIcon,
+} from "lucide-react"
 
+import Logo from "../../public/Logo.svg"
 import { NavDocuments } from "@/components/nav-documents"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
-import Logo from "../../public/Logo.svg"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import {
   Sidebar,
   SidebarContent,
@@ -14,179 +30,77 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { LayoutDashboardIcon, ListIcon, ChartBarIcon, FolderIcon, UsersIcon, CameraIcon, FileTextIcon, Settings2Icon, CircleHelpIcon, SearchIcon, DatabaseIcon, FileChartColumnIcon, FileIcon, CommandIcon } from "lucide-react"
-import { useState , useEffect } from "react"
+import { useAuth } from "@/contexts/AuthContext"
+import { resolveAvatarUrl } from "@/lib/avatar"
 
-import { useAuth } from "../contexts/AuthContext";
-import { supabase } from "../lib/supabase";
-
-
-const data = {
-  navMain: [
-    {
-      title: "בית",
-      url: "#",
-      icon: (
-        <LayoutDashboardIcon
-        />
-      ),
-    },
-    {
-      title: "סטטיסטיקה",
-      url: "#",
-      icon: (
-        <ChartBarIcon
-        />
-      ),
-    },
-    {
-      title: "פרויקטים",
-      url: "#",
-      icon: (
-        <FolderIcon
-        />
-      ),
-    },
-    {
-      title: "הקבוצה",
-      url: "#",
-      icon: (
-        <UsersIcon
-        />
-      ),
-    },
-  ],
-  navClouds: [
-    {
-      title: "Capture",
-      icon: (
-        <CameraIcon
-        />
-      ),
-      isActive: true,
-      url: "#",
-      items: [
-        {
-          title: "Active Proposals",
-          url: "#",
-        },
-        {
-          title: "Archived",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Proposal",
-      icon: (
-        <FileTextIcon
-        />
-      ),
-      url: "#",
-      items: [
-        {
-          title: "Active Proposals",
-          url: "#",
-        },
-        {
-          title: "Archived",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Prompts",
-      icon: (
-        <FileTextIcon
-        />
-      ),
-      url: "#",
-      items: [
-        {
-          title: "Active Proposals",
-          url: "#",
-        },
-        {
-          title: "Archived",
-          url: "#",
-        },
-      ],
-    },
-  ],
-  navSecondary: [
-    {
-      title: "הגדרות",
-      url: "#",
-      icon: (
-        <Settings2Icon
-        />
-      ),
-    },
-    {
-      title: "עזרה",
-      url: "#",
-      icon: (
-        <CircleHelpIcon
-        />
-      ),
-    },
-    {
-      title: "חיפוש",
-      url: "#",
-      icon: (
-        <SearchIcon
-        />
-      ),
-    },
-  ],
-  documents: [
-    {
-      name: "מרכז שירות דיזנגוף",
-      url: "#",
-      icon: (
-        <DatabaseIcon
-        />
-      ),
-    },
-    {
-      name: "דוכן בית שמש",
-      url: "#",
-      icon: (
-        <FileChartColumnIcon
-        />
-      ),
-    },
-    {
-      name: "דינמיקה פלוס מלחה",
-      url: "#",
-      icon: (
-        <FileIcon
-        />
-      ),
-    },
-  ],
+type TrackNavigationItem = {
+  id: number
+  name: string | null
 }
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+const navMain = [
+  {
+    title: "נקודות",
+    url: "/dashboard",
+    icon: <LayoutDashboardIcon />,
+  },
+  {
+    title: "סטטיסטיקות",
+    url: "/statistics",
+    icon: <BarChart3Icon />,
+  },
+]
 
-const { user, profile, loading } = useAuth();
-const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined)
+const navSecondary = [
+  {
+    title: "פרופיל",
+    url: "/profile",
+    icon: <UserRoundIcon />,
+  },
+  {
+    title: "חיפוש",
+    url: "/search",
+    icon: <SearchIcon />,
+  },
+  {
+    title: "עזרה",
+    url: "/help",
+    icon: <CircleHelpIcon />,
+  },
+]
 
-useEffect(() => {
+interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
+  tracks?: TrackNavigationItem[]
+  tracksLoading?: boolean
+}
 
-  const loadAvatar = async () => {
-    if (!profile?.avatar_url) return
+export function AppSidebar({
+  tracks = [],
+  tracksLoading = false,
+  ...props
+}: AppSidebarProps) {
+  const { user, profile } = useAuth()
+  const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined)
 
-    const { data } = await supabase.storage
-      .from("avatars")
-      .createSignedUrl("ee2891d6-4f1f-4468-99c4-c401a6db010d/avatar.png", 3600)
+  useEffect(() => {
+    const loadAvatar = async () => {
+      if (!profile?.avatar_url) {
+        setAvatarUrl(undefined)
+        return
+      }
 
-    if (data) setAvatarUrl(data.signedUrl)
-  }
+      const resolvedUrl = await resolveAvatarUrl(profile.avatar_url)
+      setAvatarUrl(resolvedUrl)
+    }
 
-  loadAvatar()
-}, [profile])
+    void loadAvatar()
+  }, [profile])
 
+  const trackItems = tracks.map((track) => ({
+    name: track.name?.trim() || `Track #${track.id}`,
+    url: "#",
+    icon: <RouteIcon />,
+  }))
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
@@ -195,23 +109,53 @@ useEffect(() => {
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
-              className="data-[slot=sidebar-menu-button]:p-1.5!"
+              size="lg"
+              className="min-h-14 data-[slot=sidebar-menu-button]:px-3"
             >
-              <a href="#">
-                <img className="size-8" src={Logo} alt="" />
-                <span className="text-base font-semibold">companion</span>
-              </a>
+              <Link to="/dashboard" className="flex items-center gap-3">
+                <img className="size-9 shrink-0" src={Logo} alt="" />
+                <div className="min-w-0">
+                  <div className="truncate text-lg font-semibold leading-none">companion</div>
+                  <div className="truncate pt-1 text-xs text-sidebar-foreground/70">
+                    סביבת עבודה
+                  </div>
+                </div>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
-        <NavDocuments items={data.documents} />
-        <NavSecondary items={data.navSecondary} className="mt-auto" />
+        <NavMain items={navMain} />
+        <div className="px-2">
+          <Card size="sm" className="border border-sidebar-border/70 bg-sidebar-accent/35">
+            <CardHeader className="gap-1">
+              <CardTitle className="text-sm">סביבת עבודה</CardTitle>
+              <CardDescription>
+                ניווט מהיר בין נקודות, סטטיסטיקות וכלי עזר.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="text-xs text-sidebar-foreground/70">
+              פתחו נקודה כדי לטעון את המסלולים שלה ולשמור על זרימת עבודה ממוקדת.
+            </CardContent>
+          </Card>
+        </div>
+        <NavDocuments
+          label="מסלולים"
+          items={trackItems}
+          loading={tracksLoading}
+          emptyMessage="פתחו נקודה כדי לטעון את המסלולים שלה"
+        />
+        <NavSecondary items={navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={{name: profile?.display_name ,email: user?.email ,avatar: avatarUrl,}} />
+        <NavUser
+          user={{
+            name: profile?.display_name,
+            email: user?.email,
+            avatar: avatarUrl,
+          }}
+        />
       </SidebarFooter>
     </Sidebar>
   )

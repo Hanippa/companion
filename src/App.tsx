@@ -1,24 +1,22 @@
 
 import { BrowserRouter, Routes, Route ,Navigate} from "react-router-dom"
-import { useState, useEffect  } from 'react';
-import { useNavigate } from "react-router-dom"
 import './App.css'
 import { useAuth  } from "./contexts/AuthContext"
 import LoginPage from "./pages/LoginPage";
 import Dashboard from "./pages/Dashboard";
+import PointPage from "./pages/PointPage";
+import PointEditPage from "./pages/PointEditPage";
+import ProfilePage from "./pages/ProfilePage";
+import HelpPage from "./pages/HelpPage";
+import SearchPage from "./pages/SearchPage";
+import StatisticsPage from "./pages/StatisticsPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { Spinner } from "./components/ui/spinner";
-import { supabase } from "./lib/supabase";
 import { TooltipProvider } from "@/components/ui/tooltip"
 
 
 function App() {
-    
-
-
   const { session , loading } = useAuth()
-   useEffect(() => {
-  }, [])
 
   if (loading){return <Spinner/>}
   return (
@@ -40,6 +38,13 @@ function App() {
 
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/statistics" element={<StatisticsPage />} />
+        <Route path="/search" element={<SearchPage />} />
+        <Route path="/help" element={<HelpPage />} />
+        <Route path="/:organizationSlug" element={<Dashboard />} />
+        <Route path="/:organizationSlug/:pointSlug/edit" element={<PointEditPage />} />
+        <Route path="/:organizationSlug/:pointSlug" element={<PointPage />} />
       </Route>
 
     </Routes>

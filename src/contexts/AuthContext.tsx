@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { supabase } from "../lib/supabase";
 import type { Session, User } from "@supabase/supabase-js";
 
-interface Profile {
+export interface Profile {
   id: string;
   display_name: string;
   avatar_url: string;
@@ -14,6 +14,7 @@ interface AuthContextProps {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextProps>({
@@ -21,6 +22,7 @@ const AuthContext = createContext<AuthContextProps>({
   user: null,
   profile: null,
   loading: true,
+  refreshProfile: async () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -42,6 +44,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else {
       setProfile(data);
     }
+  };
+
+  const refreshProfile = async () => {
+    if (!user) {
+      setProfile(null);
+      return;
+    }
+
+    await fetchProfile(user.id);
   };
 
   useEffect(() => {
@@ -66,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading }}>
+    <AuthContext.Provider value={{ session, user, profile, loading, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

@@ -14,6 +14,7 @@
 @layer base {
   html {
     @apply h-full;
+    font-family: "Fredoka", sans-serif;
   }
 }
 
@@ -22,18 +23,21 @@
   --color-dgreen:#CBFF4D;
   --color-dgreenbg:#ffCBFF4D;
 } 
-
-
-body {
-  @apply font-fredoka;
-  
-}
 html {
   scrollbar-gutter: stable;
 }
 
 body {
+  @apply font-fredoka;
+  font-family: "Fredoka", sans-serif;
   overflow-y: scroll;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
 body[data-scroll-locked] {

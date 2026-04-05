@@ -18,8 +18,15 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { EllipsisVerticalIcon, CircleUserRoundIcon, CreditCardIcon, BellIcon, LogOutIcon } from "lucide-react"
+import {
+  BellIcon,
+  CircleUserRoundIcon,
+  EllipsisVerticalIcon,
+  LogOutIcon,
+} from "lucide-react"
 import { useNavigate } from "react-router-dom"
+
+import { getAvatarInitials } from "@/lib/avatar"
 import { supabase } from "@/lib/supabase"
 
 export function NavUser({
@@ -32,12 +39,14 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
-        const navigate = useNavigate()
-    async function handleLogout() {
-      await supabase.auth.signOut()
-      navigate("/login")
-    }
-    
+  const navigate = useNavigate()
+
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    navigate("/login")
+  }
+
+  const fallback = getAvatarInitials(user.name, user.email)
 
   return (
     <SidebarMenu>
@@ -50,7 +59,7 @@ export function NavUser({
             >
               <Avatar className="h-8 w-8 rounded-lg grayscale">
                 <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                <AvatarFallback className="rounded-lg">{fallback}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-start text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
@@ -71,7 +80,7 @@ export function NavUser({
               <div className="flex items-center gap-2 px-1 py-1.5 text-start text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
                   <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                  <AvatarFallback className="rounded-lg">{fallback}</AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-start text-sm leading-tight">
                   <span className="truncate font-medium">{user.name}</span>
@@ -83,22 +92,19 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <CircleUserRoundIcon
-                />
-                חשבון
+              <DropdownMenuItem onClick={() => navigate("/profile")}>
+                <CircleUserRoundIcon />
+                פרופיל
               </DropdownMenuItem>
               <DropdownMenuItem>
-                <BellIcon
-                />
+                <BellIcon />
                 התראות
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>
-              <LogOutIcon
-              />
-              יציאה
+              <LogOutIcon />
+              התנתקות
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
