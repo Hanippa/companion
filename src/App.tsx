@@ -5,26 +5,25 @@ import { useNavigate } from "react-router-dom"
 import './App.css'
 import { useAuth  } from "./contexts/AuthContext"
 import LoginPage from "./pages/LoginPage";
-import Tracker from "./pages/Tracker";
+import Dashboard from "./pages/Dashboard";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { Spinner } from "./components/ui/spinner";
 import { supabase } from "./lib/supabase";
+import { TooltipProvider } from "@/components/ui/tooltip"
 
 
 function App() {
-    const navigate = useNavigate()
+    
 
-  async function handleLogout() {
-    await supabase.auth.signOut()
-    navigate("/login")
-  }
 
   const { session , loading } = useAuth()
    useEffect(() => {
   }, [])
 
-  if (loading){return <h1>loading...</h1>}
+  if (loading){return <Spinner/>}
   return (
     <BrowserRouter>
+    <TooltipProvider>
  <Routes>
       <Route
         path="/"
@@ -40,10 +39,11 @@ function App() {
         <LoginPage /> : <Navigate to="/dashboard" replace/>} />
 
       <Route element={<ProtectedRoute />}>
-        <Route path="/dashboard" element={<Tracker />} />
+        <Route path="/dashboard" element={<Dashboard />} />
       </Route>
 
     </Routes>
+    </TooltipProvider>
     </BrowserRouter>
   )
 }

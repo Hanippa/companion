@@ -1,11 +1,12 @@
+
 @font-face {
-  font-family: Fredoka;
+  font-family: "Fredoka";
   src: url(./assets/fonts/Fredoka-Regular.ttf);
   font-weight: 400;
 }
 
 @font-face {
-  font-family: Fredoka;
+  font-family: "Fredoka";
   src: url(./assets/fonts/Fredoka-Light.ttf);
   font-weight: 200;
 }
@@ -20,4 +21,21 @@
   --font-fredoka: Fredoka , "sans-serif";
   --color-dgreen:#CBFF4D;
   --color-dgreenbg:#ffCBFF4D;
+} 
+
+
+body {
+  @apply font-fredoka;
+  
+}
+html {
+  scrollbar-gutter: stable;
+}
+
+body {
+  overflow-y: scroll;
+}
+
+body[data-scroll-locked] {
+  padding-right: 0 !important;
 }

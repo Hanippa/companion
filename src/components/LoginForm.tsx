@@ -18,31 +18,41 @@ import {
 import { Input } from "@/components/ui/input"
 import { useState } from "react"
 import { supabase } from "../lib/supabase"
+import { Spinner } from "./ui/spinner"
 
 export function LoginForm() {
     const [email, setEmail] = useState("")
     const [message, setMessage] = useState("")
+    const [loadingStatus , setloadingStatus] =useState(false);
 
      const handleLogin = async (e: React.FormEvent) => {
+      if(!loadingStatus){
+        setMessage("מאמת פרטים...")
+        setloadingStatus(true)
         e.preventDefault()
+        console.log("triggered server auth aciton")
         const { data, error } = await supabase.auth.signInWithOtp({
           email
         })
     
         if (error) {
           setMessage(error.message)
+          setloadingStatus(false)
         } else {
-          setMessage("Check your email for the login code!")
+          setMessage("שלחנו לכם מייל עם קישור לכניסה!")
+          setloadingStatus(false)
         }
       }
+       
+      }
   return (
-    <div className='flex justify-center items-center h-full w-full'>
+
     <div className={cn("flex flex-col gap-6 font-fredoka")}>
       <div className="flex items-center justify-center gap-2">
         <div className="flex items-center justify-center"><div className="text-3xl font-light" >companion</div></div>
         <img className="size-8" src={Logo} alt="" />
       </div>
-      <Card>
+      <Card className="">
         <CardHeader className="text-center">
           <CardTitle className="font-fredoka text-3xl font-medium">  ברוכים הבאים 👋</CardTitle>
           <CardDescription>
@@ -72,13 +82,16 @@ export function LoginForm() {
                   required
                 />
               </Field>
-            
+              <Field className="text-center">
+{message}
+              </Field>
+              
               <Field>
-                <Button className="text-black" type="submit">התחבר</Button>
+                <Button disabled={loadingStatus} className="text-black" type="submit">{loadingStatus ? <Spinner/> : "התחבר" }</Button>
                 <FieldDescription className="text-center">
-                  לא מצליכים להיכנס 
+                  לא מצליכים להיכנס ?
                  <>   </>
-                 <a href="#">יצירת קשר ?</a>
+                 <a href="#">יצירת קשר </a>
                 </FieldDescription>
               </Field>
             </FieldGroup>
@@ -89,7 +102,6 @@ export function LoginForm() {
         בלחיצה על התחברות, אתם מסכימים ל<a href="#">תנאי השימוש</a>  {" "}
         ול<a href="#">מדיניות הפרטיות שלנו</a>
       </FieldDescription>
-    </div>
     </div>
   )
 }
