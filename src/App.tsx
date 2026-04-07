@@ -6,6 +6,7 @@ import LoginPage from "./pages/LoginPage";
 import Dashboard from "./pages/Dashboard";
 import PointPage from "./pages/PointPage";
 import PointEditPage from "./pages/PointEditPage";
+import TrackPage from "./pages/TrackPage";
 import ProfilePage from "./pages/ProfilePage";
 import HelpPage from "./pages/HelpPage";
 import SearchPage from "./pages/SearchPage";
@@ -44,6 +45,7 @@ function App() {
         <Route path="/help" element={<HelpPage />} />
         <Route path="/:organizationSlug" element={<Dashboard />} />
         <Route path="/:organizationSlug/:pointSlug/edit" element={<PointEditPage />} />
+        <Route path="/:organizationSlug/:pointSlug/track/:trackSlug" element={<TrackPage />} />
         <Route path="/:organizationSlug/:pointSlug" element={<PointPage />} />
       </Route>
 

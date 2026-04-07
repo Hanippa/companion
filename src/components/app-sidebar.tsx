@@ -36,6 +36,8 @@ import { resolveAvatarUrl } from "@/lib/avatar"
 type TrackNavigationItem = {
   id: number
   name: string | null
+  url?: string
+  isActive?: boolean
 }
 
 const navMain = [
@@ -98,8 +100,9 @@ export function AppSidebar({
 
   const trackItems = tracks.map((track) => ({
     name: track.name?.trim() || `Track #${track.id}`,
-    url: "#",
+    url: track.url || "#",
     icon: <RouteIcon />,
+    isActive: track.isActive,
   }))
 
   return (

@@ -8,6 +8,11 @@ export type PointRecord = {
   name: string | null
 }
 
+export type TrackRecord = {
+  id: number
+  name: string | null
+}
+
 function slugifySegment(value: string) {
   const slug = value
     .toLowerCase()
@@ -29,6 +34,10 @@ export function getOrganizationSegment(organization: OrganizationRecord) {
 
 export function getPointSegment(point: PointRecord) {
   return buildSegment(point.id, point.name, "point")
+}
+
+export function getTrackSegment(track: TrackRecord) {
+  return buildSegment(track.id, track.name, "track")
 }
 
 export function getRecordIdFromSegment(segment?: string) {
