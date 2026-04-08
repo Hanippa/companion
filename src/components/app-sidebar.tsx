@@ -15,13 +15,6 @@ import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -99,28 +92,30 @@ export function AppSidebar({
   }, [profile])
 
   const trackItems = tracks.map((track) => ({
-    name: track.name?.trim() || `Track #${track.id}`,
+    name: track.name?.trim() || `מסלול #${track.id}`,
     url: track.url || "#",
-    icon: <RouteIcon />,
+    icon: <RouteIcon className="size-4" />,
     isActive: track.isActive,
   }))
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
-      <SidebarHeader>
-        <SidebarMenu>
+      <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
+        <SidebarMenu dir="rtl">
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
               size="lg"
-              className="min-h-14 data-[slot=sidebar-menu-button]:px-3"
+              className="h-14 rounded-2xl border border-sidebar-border bg-sidebar px-3"
             >
               <Link to="/dashboard" className="flex items-center gap-3">
-                <img className="size-9 shrink-0" src={Logo} alt="" />
+                <div className="flex size-10 items-center justify-center rounded-xl bg-primary/15">
+                  <img className="size-5 shrink-0" src={Logo} alt="" />
+                </div>
                 <div className="min-w-0">
-                  <div className="truncate text-lg font-semibold leading-none">companion</div>
-                  <div className="truncate pt-1 text-xs text-sidebar-foreground/70">
-                    סביבת עבודה
+                  <div className="truncate text-sm font-semibold leading-none">companion</div>
+                  <div className="truncate pt-1 text-xs text-sidebar-foreground/65">
+                    סביבת עבודה חכמה
                   </div>
                 </div>
               </Link>
@@ -128,30 +123,19 @@ export function AppSidebar({
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
-      <SidebarContent>
+
+      <SidebarContent className="gap-4 px-3 py-4">
         <NavMain items={navMain} />
-        <div className="px-2">
-          <Card size="sm" className="border border-sidebar-border/70 bg-sidebar-accent/35">
-            <CardHeader className="gap-1">
-              <CardTitle className="text-sm">סביבת עבודה</CardTitle>
-              <CardDescription>
-                ניווט מהיר בין נקודות, סטטיסטיקות וכלי עזר.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="text-xs text-sidebar-foreground/70">
-              פתחו נקודה כדי לטעון את המסלולים שלה ולשמור על זרימת עבודה ממוקדת.
-            </CardContent>
-          </Card>
-        </div>
         <NavDocuments
           label="מסלולים"
           items={trackItems}
           loading={tracksLoading}
-          emptyMessage="פתחו נקודה כדי לטעון את המסלולים שלה"
+          emptyMessage="פתחו נקודה כדי לראות את המסלולים שלה"
         />
         <NavSecondary items={navSecondary} className="mt-auto" />
       </SidebarContent>
-      <SidebarFooter>
+
+      <SidebarFooter className="border-t border-sidebar-border px-3 py-4">
         <NavUser
           user={{
             name: profile?.display_name,

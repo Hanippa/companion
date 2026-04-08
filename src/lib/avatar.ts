@@ -4,17 +4,46 @@ const supportedAvatarMimeTypes = ["image/jpeg", "image/png", "image/webp"] as co
 const STANDARD_AVATAR_EXTENSION = "webp"
 const STANDARD_AVATAR_MIME_TYPE = "image/webp"
 const STANDARD_AVATAR_SIZE = 512
+const SIGNED_AVATAR_URL_TTL_MS = 50 * 60 * 1000
+
+const signedAvatarUrlCache = new Map<string, { expiresAt: number; value: string }>()
+const signedAvatarUrlInflight = new Map<string, Promise<string | null>>()
 
 async function createSignedAvatarUrl(path: string) {
-  const { data, error } = await supabase.storage
-    .from("avatars")
-    .createSignedUrl(path, 3600)
+  const now = Date.now()
+  const cached = signedAvatarUrlCache.get(path)
 
-  if (error) {
-    return null
+  if (cached && cached.expiresAt > now) {
+    return cached.value
   }
 
-  return data.signedUrl
+  const inflight = signedAvatarUrlInflight.get(path)
+  if (inflight) {
+    return inflight
+  }
+
+  const request = supabase.storage
+    .from("avatars")
+    .createSignedUrl(path, 3600)
+    .then(({ data, error }) => {
+      if (error || !data?.signedUrl) {
+        return null
+      }
+
+      signedAvatarUrlCache.set(path, {
+        expiresAt: Date.now() + SIGNED_AVATAR_URL_TTL_MS,
+        value: data.signedUrl,
+      })
+
+      return data.signedUrl
+    })
+    .finally(() => {
+      signedAvatarUrlInflight.delete(path)
+    })
+
+  signedAvatarUrlInflight.set(path, request)
+
+  return request
 }
 
 export async function resolveAvatarUrl(avatarPath?: string | null) {

@@ -29,23 +29,27 @@ export function SiteHeader({
   const shouldShowOrganizationPicker = organizations.length > 1 && onOrganizationChange
 
   const selectedOrganizationLabel =
-    organizations.find((organization) => organization.id.toString() === selectedOrganizationId)?.label ??
-    null
+    organizations.find((organization) => organization.id.toString() === selectedOrganizationId)
+      ?.label ?? null
 
   return (
-    <header className="flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
-      <div className="flex h-full w-full items-center gap-3 px-4 lg:px-6">
-        <SidebarTrigger className="-ms-1" />
-        <div className="h-4 w-px shrink-0 self-center bg-border" aria-hidden="true" />
+    <header className="sticky top-0 z-20 flex h-(--header-height) shrink-0 items-center border-b border-border/60 bg-background/90 backdrop-blur-md">
+      <div className="flex h-full w-full items-center gap-3 px-4 lg:px-6" dir="rtl">
+        <SidebarTrigger className="flex size-10 items-center justify-center rounded-xl border border-border bg-card p-0 text-foreground hover:bg-accent" />
+
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-base font-medium">{title}</h1>
+          <p className="text-xs text-muted-foreground">companion</p>
+          <h1 className="truncate text-base font-semibold tracking-tight md:text-lg">
+            {title}
+          </h1>
         </div>
+
         {shouldShowOrganizationPicker ? (
           <Select value={selectedOrganizationId || undefined} onValueChange={onOrganizationChange}>
-            <SelectTrigger className="w-full max-w-64">
-              <SelectValue placeholder="Choose organization" />
+            <SelectTrigger className="h-10 w-full max-w-72 rounded-xl border-border bg-card text-right shadow-none">
+              <SelectValue placeholder="בחירת ארגון" />
             </SelectTrigger>
-            <SelectContent align="end">
+            <SelectContent align="end" className="rounded-xl">
               {organizations.map((organization) => (
                 <SelectItem key={organization.id} value={organization.id.toString()}>
                   {organization.label}
@@ -54,7 +58,7 @@ export function SiteHeader({
             </SelectContent>
           </Select>
         ) : selectedOrganizationLabel ? (
-          <Badge variant="outline" className="max-w-64 truncate">
+          <Badge variant="outline" className="max-w-64 rounded-full px-3 py-1 text-sm font-medium">
             {selectedOrganizationLabel}
           </Badge>
         ) : null}

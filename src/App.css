@@ -124,7 +124,8 @@
     font-family: "Fredoka", sans-serif;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background;
+    color: var(--foreground);
     font-family: "Fredoka", sans-serif;
     }
 }

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import {
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -30,16 +31,22 @@ export function NavMain({
   }
 
   return (
-    <SidebarGroup>
-      <SidebarGroupContent className="flex flex-col gap-2">
-        <Button className="w-full justify-start text-black">
+    <SidebarGroup dir="rtl">
+      <SidebarGroupLabel>ראשי</SidebarGroupLabel>
+      <SidebarGroupContent className="space-y-3">
+        <Button className="h-11 w-full justify-start rounded-xl bg-primary text-black shadow-none transition hover:bg-primary/90">
           <CirclePlusIcon className="size-4" />
           יצירה מהירה
         </Button>
-        <SidebarMenu>
+        <SidebarMenu className="space-y-1">
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton asChild tooltip={item.title} isActive={isItemActive(item.url)}>
+              <SidebarMenuButton
+                asChild
+                tooltip={item.title}
+                isActive={isItemActive(item.url)}
+                className="h-10 rounded-xl text-sm hover:bg-sidebar-accent/80 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium"
+              >
                 <Link to={item.url}>
                   {item.icon}
                   <span>{item.title}</span>

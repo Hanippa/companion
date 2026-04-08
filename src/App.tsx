@@ -1,11 +1,11 @@
 
 import { BrowserRouter, Routes, Route ,Navigate} from "react-router-dom"
-import './App.css'
 import { useAuth  } from "./contexts/AuthContext"
 import LoginPage from "./pages/LoginPage";
 import Dashboard from "./pages/Dashboard";
 import PointPage from "./pages/PointPage";
 import PointEditPage from "./pages/PointEditPage";
+import TrackCreatePage from "./pages/TrackCreatePage";
 import TrackPage from "./pages/TrackPage";
 import ProfilePage from "./pages/ProfilePage";
 import HelpPage from "./pages/HelpPage";
@@ -45,6 +45,7 @@ function App() {
         <Route path="/help" element={<HelpPage />} />
         <Route path="/:organizationSlug" element={<Dashboard />} />
         <Route path="/:organizationSlug/:pointSlug/edit" element={<PointEditPage />} />
+        <Route path="/:organizationSlug/:pointSlug/track/new" element={<TrackCreatePage />} />
         <Route path="/:organizationSlug/:pointSlug/track/:trackSlug" element={<TrackPage />} />
         <Route path="/:organizationSlug/:pointSlug" element={<PointPage />} />
       </Route>

@@ -278,7 +278,7 @@ export default function PointEditPage() {
       <AppSidebar side="right" variant="inset" />
       <SidebarInset>
         <SiteHeader
-          title={pointName || point?.name?.trim() || "Edit point"}
+          title="עריכת נקודה"
           organizations={organizationOptions}
           selectedOrganizationId={selectedOrganization?.id.toString()}
           onOrganizationChange={handleOrganizationChange}

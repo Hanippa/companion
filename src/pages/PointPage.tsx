@@ -273,7 +273,9 @@ export default function PointPage() {
       if (permissionResult.error) {
         console.error("Error fetching point permissions:", permissionResult.error)
         setCanEdit(false)
-      } else setCanEdit((permissionResult.data ?? []).length > 0)
+      } else {
+        setCanEdit((permissionResult.data ?? []).length > 0)
+      }
       setLoadingPermissions(false)
 
       if (membersResult.error) {
@@ -285,7 +287,7 @@ export default function PointPage() {
       }
 
       const memberRows = membersResult.data ?? []
-      const userIds = memberRows.map((member) => member.user_id)
+      const userIds = Array.from(new Set(memberRows.map((member) => member.user_id)))
       if (userIds.length === 0) {
         setMembers([])
         setLoadingMembers(false)
@@ -339,31 +341,27 @@ export default function PointPage() {
   }
 
   return (
-    <SidebarProvider style={{ "--sidebar-width": "calc(var(--spacing) * 72)", "--header-height": "calc(var(--spacing) * 12)" } as CSSProperties}>
+    <SidebarProvider style={{ "--sidebar-width": "calc(var(--spacing) * 74)", "--header-height": "calc(var(--spacing) * 13)" } as CSSProperties}>
       <AppSidebar
         side="right"
         variant="inset"
-        tracks={tracks.map((track) => ({
-          id: track.id,
-          name: getTrackRecordTitle(track),
-          url: track.url,
-        }))}
+        tracks={tracks.map((track) => ({ id: track.id, name: getTrackRecordTitle(track), url: track.url }))}
         tracksLoading={loadingTracks}
       />
       <SidebarInset>
         <SiteHeader
-          title={pointName || "נקודה"}
+          title="עמוד נקודה"
           organizations={organizationOptions}
           selectedOrganizationId={selectedOrganization?.id.toString()}
           onOrganizationChange={handleOrganizationChange}
         />
         <div className="flex flex-1 flex-col">
-          <div className="@container/main flex flex-1 flex-col gap-2">
-            <div className="flex flex-col gap-4 py-4 md:gap-5 md:py-5">
+          <div className="@container/main flex flex-1 flex-col">
+            <div className="page-shell">
+              <div className="page-stack" dir="rtl">
               {loadingOrganizations || loadingPoint ? (
-                <div className="px-4 lg:px-6">
-                  <div className="grid gap-4 xl:grid-cols-[290px_minmax(0,1fr)]">
-                    <Card className="xl:sticky xl:top-6 xl:h-fit">
+                <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+                    <Card className="rounded-[2rem] xl:sticky xl:top-24 xl:h-fit">
                       <CardHeader><Skeleton className="h-6 w-40" /><Skeleton className="h-4 w-full" /></CardHeader>
                       <CardContent className="space-y-4">
                         <Skeleton className="h-20 w-full" />
@@ -372,20 +370,19 @@ export default function PointPage() {
                         <Skeleton className="h-10 w-full" />
                       </CardContent>
                     </Card>
-                    <div className="space-y-4">
-                      <Card>
+                    <div className="space-y-5">
+                      <Card className="rounded-[2rem]">
                         <CardHeader><Skeleton className="h-6 w-32" /><Skeleton className="h-4 w-64" /></CardHeader>
                         <CardContent><div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3"><Skeleton className="h-40 w-full" /><Skeleton className="h-40 w-full" /><Skeleton className="h-40 w-full" /></div></CardContent>
                       </Card>
-                      <Card>
+                      <Card className="rounded-[2rem]">
                         <CardHeader><Skeleton className="h-6 w-32" /><Skeleton className="h-4 w-56" /></CardHeader>
                         <CardContent><div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3"><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /></div></CardContent>
                       </Card>
                     </div>
-                  </div>
                 </div>
               ) : organizationsError || pointError ? (
-                <div className="px-4 lg:px-6">
+                <div>
                   <Alert variant="destructive">
                     <CircleAlert className="size-4" />
                     <AlertTitle>הנקודה לא זמינה</AlertTitle>
@@ -393,7 +390,7 @@ export default function PointPage() {
                   </Alert>
                 </div>
               ) : !selectedOrganization ? (
-                <div className="px-4 lg:px-6">
+                <div>
                   <Alert variant="destructive">
                     <CircleAlert className="size-4" />
                     <AlertTitle>הנקודה לא זמינה</AlertTitle>
@@ -401,15 +398,14 @@ export default function PointPage() {
                   </Alert>
                 </div>
               ) : (
-                <div className="px-4 lg:px-6">
-                  <div className="grid gap-4 xl:grid-cols-[290px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)]">
-                    <Card className="xl:sticky xl:top-6 xl:h-fit">
-                      <CardHeader className="gap-1.5">
+                <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+                    <Card className="overflow-hidden border-border/70 shadow-none xl:sticky xl:top-24 xl:h-fit">
+                      <CardHeader className="gap-3">
                         <CardTitle className="flex items-center gap-2"><MapPinned className="size-5" />פרטי נקודה</CardTitle>
                         <CardDescription>מבט מרוכז על הצוות, המסלולים והמידע המשלים של הנקודה.</CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-3">
-                        <div className="rounded-3xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-4 ring-1 ring-border/40">
+                        <div className="rounded-xl border border-border bg-primary/5 p-4">
                           <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground"><Building2 className="size-3.5" />ארגון</div>
                           <div className="mt-2 text-base font-semibold leading-tight">{selectedOrganization.name?.trim() || `Organization #${selectedOrganization.id}`}</div>
                           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -418,22 +414,22 @@ export default function PointPage() {
                           </div>
                         </div>
                         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                          <div className="rounded-3xl bg-card/70 p-3.5 ring-1 ring-border/50 backdrop-blur-sm">
+                          <div className="rounded-xl border border-border bg-muted/30 p-3.5">
                             <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">מסלולים</div>
                             <div className="mt-1.5 text-2xl font-semibold">{tracks.length}</div>
                             <div className="mt-1 text-xs text-muted-foreground">רשומות מסלול פעילות בנקודה הזו</div>
                           </div>
-                          <div className="rounded-3xl bg-card/70 p-3.5 ring-1 ring-border/50 backdrop-blur-sm">
+                          <div className="rounded-xl border border-border bg-muted/30 p-3.5">
                             <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">חברים</div>
                             <div className="mt-1.5 text-2xl font-semibold">{members.length}</div>
                             <div className="mt-1 text-xs text-muted-foreground">משויכים כרגע לנקודה הזו</div>
                           </div>
                         </div>
-                        <div className="rounded-3xl bg-muted/35 p-4 ring-1 ring-border/40">
+                        <div className="rounded-xl border border-border bg-muted/30 p-4">
                           <div className="flex items-center gap-2 text-sm font-medium"><MapPinned className="size-4 text-primary" />הערות וסיכום</div>
                           <div className="mt-3"><p className="text-sm leading-6 text-muted-foreground">{pointNotes || "עדיין לא נוספו הערות לנקודה הזו."}</p></div>
                         </div>
-                        <div className="rounded-3xl border border-dashed border-border/60 bg-background/70 p-4">
+                        <div className="rounded-[1.2rem] border border-dashed border-border/70 bg-[rgba(248,249,244,0.9)] p-4">
                           <div className="flex items-center gap-2 text-sm font-medium"><ShieldCheck className="size-4 text-primary" />גישה וניהול</div>
                           <div className="mt-1 text-sm text-muted-foreground">עריכת הנקודה נשארת בעמוד נפרד כדי לשמור על תצוגת הקריאה נקייה ופשוטה.</div>
                         </div>
@@ -453,11 +449,35 @@ export default function PointPage() {
                       </CardContent>
                     </Card>
 
-                    <div className="space-y-4">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="flex items-center gap-2"><Route className="size-5" />מסלולים</CardTitle>
-                          <CardDescription>כל מסלול נטען מרשומת מעקב חיה יחד עם סוג המסלול, השלב הנוכחי ואפשרויות ההמשך.</CardDescription>
+                    <div className="space-y-5">
+                      <Card className="overflow-hidden border-border/70 shadow-none">
+                        <CardHeader className="gap-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <CardTitle className="flex items-center gap-2"><Route className="size-5" />מסלולים</CardTitle>
+                              <CardDescription>כל מסלול נטען מרשומת מעקב חיה יחד עם סוג המסלול, השלב הנוכחי ואפשרויות ההמשך.</CardDescription>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-[1rem]"
+                              onClick={() =>
+                                navigate(
+                                  `/${getOrganizationSegment(selectedOrganization)}/${getPointSegment(
+                                    currentPoint ?? {
+                                      id: pointIdFromRoute ?? 0,
+                                      organization_id: selectedOrganization.id,
+                                      name: pointName || null,
+                                      notes: pointNotes || null,
+                                      status: null,
+                                    }
+                                  )}/track/new`
+                                )
+                              }
+                            >
+                              יצירת מסלול
+                            </Button>
+                          </div>
                         </CardHeader>
                         <CardContent className="space-y-4">
                           {loadingTracks ? (
@@ -467,13 +487,13 @@ export default function PointPage() {
                           ) : tracks.length === 0 ? (
                             <Alert><AlertTitle>אין עדיין מסלולים</AlertTitle><AlertDescription>לנקודה הזו עדיין אין רשומות מסלול גלויות עבור החשבון שלך.</AlertDescription></Alert>
                           ) : (
-                            <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+                            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
                               {tracks.map((track) => (
-                                <Card key={track.id} size="sm" className="border border-border/60 bg-muted/10">
+                                <Card key={track.id} size="sm" className="border-border/70 shadow-none transition-colors hover:border-primary/35">
                                   <CardHeader className="gap-2">
                                     <div className="flex items-center justify-between gap-3">
                                       <CardTitle className="truncate">{getTrackRecordTitle(track)}</CardTitle>
-                                      <Badge variant="outline" className="uppercase">{track.status || "active"}</Badge>
+                                      <Badge variant="outline" className="rounded-full uppercase">{track.status || "active"}</Badge>
                                     </div>
                                     <CardDescription className="space-y-1">
                                       <div>סוג מסלול: {track.trackType?.name?.trim() || `סוג #${track.trackType?.id ?? "—"}`}</div>
@@ -482,7 +502,7 @@ export default function PointPage() {
                                     </CardDescription>
                                   </CardHeader>
                                   <CardContent className="space-y-4">
-                                    {track.currentStep?.description ? <div className="rounded-2xl bg-background/70 p-3 text-sm text-muted-foreground ring-1 ring-border/50">{track.currentStep.description}</div> : null}
+                                    {track.currentStep?.description ? <div className="rounded-xl border border-border bg-muted/30 p-3 text-sm leading-6 text-muted-foreground">{track.currentStep.description}</div> : null}
                                     {track.notes ? <div className="text-sm text-muted-foreground">{track.notes}</div> : null}
                                     <div className="space-y-2">
                                       <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">צעדי המשך זמינים</div>
@@ -491,7 +511,7 @@ export default function PointPage() {
                                       ) : (
                                         <div className="flex flex-wrap gap-2">
                                           {track.nextTransitions.map((transition) => (
-                                            <Badge key={transition.id} variant="secondary" className="gap-1 rounded-full">
+                                            <Badge key={transition.id} variant="secondary" className="gap-1 rounded-full px-3 py-1">
                                               <ArrowRight className="size-3" />
                                               {transition.label}
                                             </Badge>
@@ -499,7 +519,7 @@ export default function PointPage() {
                                         </div>
                                       )}
                                     </div>
-                                    <Button variant="outline" className="w-full" onClick={() => navigate(track.url)}>
+                                    <Button variant="outline" className="w-full rounded-[1rem]" onClick={() => navigate(track.url)}>
                                       פתיחת מסלול
                                     </Button>
                                   </CardContent>
@@ -510,7 +530,7 @@ export default function PointPage() {
                         </CardContent>
                       </Card>
 
-                      <Card>
+                      <Card className="overflow-hidden border-border/70 shadow-none">
                         <CardHeader>
                           <CardTitle className="flex items-center gap-2"><Users className="size-5" />חברי נקודה</CardTitle>
                           <CardDescription>האנשים שמשויכים כרגע לנקודה הזו.</CardDescription>
@@ -523,19 +543,19 @@ export default function PointPage() {
                           ) : members.length === 0 ? (
                             <Alert><AlertTitle>אין עדיין חברים</AlertTitle><AlertDescription>לנקודה הזו עדיין אין חברים גלויים עבור החשבון שלך.</AlertDescription></Alert>
                           ) : (
-                            <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+                            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
                               {members.map((member) => (
-                                <Card key={`${member.point_id}-${member.user_id}`} size="sm" className="border border-border/60">
+                                <Card key={`${member.point_id}-${member.user_id}`} size="sm" className="border-border/70 shadow-none transition-colors hover:border-primary/35">
                                   <CardContent className="flex items-center gap-3 py-4">
-                                    <Avatar className="size-11 rounded-2xl">
+                                    <Avatar className="size-11 rounded-[1rem]">
                                       <AvatarImage src={member.avatarUrl} alt={formatMemberName(member)} />
-                                      <AvatarFallback className="rounded-2xl">{getAvatarInitials(member.profile?.display_name, member.user_id)}</AvatarFallback>
+                                      <AvatarFallback className="rounded-[1rem]">{getAvatarInitials(member.profile?.display_name || member.title)}</AvatarFallback>
                                     </Avatar>
                                     <div className="min-w-0 flex-1">
                                       <div className="truncate font-medium">{formatMemberName(member)}</div>
                                       <div className="truncate text-xs text-muted-foreground">{formatMemberMeta(member)}</div>
                                     </div>
-                                    <Badge variant="outline" className="uppercase">{member.role || "member"}</Badge>
+                                    <Badge variant="outline" className="rounded-full uppercase">{member.role || "member"}</Badge>
                                   </CardContent>
                                 </Card>
                               ))}
@@ -544,9 +564,9 @@ export default function PointPage() {
                         </CardContent>
                       </Card>
                     </div>
-                  </div>
                 </div>
               )}
+              </div>
             </div>
           </div>
         </div>
