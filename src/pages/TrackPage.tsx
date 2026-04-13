@@ -1,58 +1,81 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { CircleAlert, Database, Route } from "lucide-react"
+import {
+  Building2,
+  CircleAlert,
+  MapPinned,
+  Route,
+  Rows3,
+  TimerReset,
+} from "lucide-react"
 
 import { AppSidebar } from "@/components/app-sidebar"
+import {
+  InfoPanel,
+  InfoPanelBody,
+  InfoPanelDetail,
+  InfoPanelDetailList,
+  InfoPanelHeader,
+  InfoPanelSection,
+  InfoPanelStat,
+  InfoPanelStats,
+} from "@/components/info-panel"
+import { SiteHeader } from "@/components/site-header"
 import { TrackRecordData } from "@/components/track-record-data"
 import {
   TrackStepper,
-  type TrackStep,
+  type TrackNodeAction,
   type TrackStepperEvent,
-  type TrackTransition,
 } from "@/components/track-stepper"
-import { SiteHeader } from "@/components/site-header"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
-import {
-  getOrganizationSegment,
-  getPointSegment,
-  getRecordIdFromSegment,
-  getTrackSegment,
-} from "@/lib/drilldown"
-import { resolveAvatarUrl } from "@/lib/avatar"
+import { getOrganizationSegment, getPointSegment, getRecordIdFromSegment, getTrackSegment } from "@/lib/drilldown"
+import { getOrganizationsCached } from "@/lib/organizations"
+import { getProfilesByIdsCached } from "@/lib/profile-cache"
 import { supabase } from "@/lib/supabase"
+import { getTrackCurrentNode, normalizeTrackSchema, type NormalizedTrackSchema, type TrackNode } from "@/lib/track-schema"
 
-type Organization = { id: number; name: string | null; status: string | null }
-type PointRecord = { id: number; organization_id: number; name: string | null; notes: string | null; status: string | null }
-type FormNode = { id: string; label: string; children?: FormNode[] }
-type FormField = { id: string; type: string; label: string; required?: boolean; placeholder?: string; nodes?: FormNode[] }
-type FormSection = { id: string; title: string; fields: FormField[] }
-type FormSchema = { title?: string | null; sections?: FormSection[] }
-type TrackSchema = { title?: string | null; description?: string | null; initial_step?: string | null; steps?: TrackStep[] }
-type TrackType = { id: number; name: string | null; form_schema: FormSchema | null; track_schema: TrackSchema | null }
+type Organization = {
+  id: number
+  name: string | null
+  notes: string | null
+  status: string | null
+}
+
+type PointRecord = {
+  id: number
+  organization_id: number
+  name: string | null
+  notes: string | null
+  status: string | null
+}
+
+type TrackType = {
+  id: number
+  name: string | null
+  status: string | null
+  form_schema: unknown
+  track_schema: NormalizedTrackSchema | Record<string, unknown> | null
+  vesrion: number | null
+}
+
 type TrackingRecordRow = {
   id: number
   ref_id: number
   point_id: number | null
+  track_type_id: number | null
   name: string | null
   status: string | null
   current_step: string | null
   data: Record<string, unknown> | null
   notes: string | null
+  point: PointRecord | PointRecord[] | null
   track_type: TrackType | TrackType[] | null
 }
-type EventRow = {
-  id: number
-  event_type: string
-  user_id: string | null
-  step_key: string | null
-  payload: Record<string, unknown> | null
-  created_at: string
-  actor_name?: string | null
-  actor_avatar_url?: string | null
-}
+
 type TrackRecord = {
   id: number
   refId: number
@@ -61,36 +84,31 @@ type TrackRecord = {
   currentStepKey: string | null
   data: Record<string, unknown> | null
   notes: string | null
+  point: PointRecord | null
   trackType: TrackType | null
-  currentStep: TrackStep | null
-  nextTransitions: TrackTransition[]
-  url: string
+  trackSchema: NormalizedTrackSchema | null
+  currentNode: TrackNode | null
 }
 
-type LoadedTrackPage = {
-  organizations: Organization[]
-  point: PointRecord
-  track: TrackRecord
-  pointTracks: TrackRecord[]
-  events: EventRow[]
+type RawEventRow = {
+  id: number
+  user_id: string | null
+  event_type: string
+  step_key: string | null
+  payload: Record<string, unknown> | null
+  created_at: string
 }
 
-const normalizeTrackType = (trackType: TrackType | TrackType[] | null) =>
-  Array.isArray(trackType) ? trackType[0] ?? null : trackType
+const normalizeSingleRow = <T,>(value: T | T[] | null): T | null =>
+  Array.isArray(value) ? value[0] ?? null : value
 
-const getCurrentStep = (trackType: TrackType | null, currentStepKey: string | null) => {
-  const steps = trackType?.track_schema?.steps ?? []
-  if (currentStepKey) {
-    const match = steps.find((step) => step.id === currentStepKey)
-    if (match) return match
-  }
-  const initialStepKey = trackType?.track_schema?.initial_step
-  if (initialStepKey) return steps.find((step) => step.id === initialStepKey) ?? null
-  return steps[0] ?? null
+const getTrackRecordTitle = (track: TrackRecord | null) => {
+  if (!track) return "מסלול"
+  return track.name?.trim() || track.trackType?.name?.trim() || `מסלול #${track.id}`
 }
 
-const getTrackTitle = (track: { id: number; name: string | null; trackType?: TrackType | null }) =>
-  track.name?.trim() || track.trackType?.name?.trim() || `רשומת מסלול #${track.id}`
+const getStatusLabel = (status: string | null | undefined) =>
+  status === "active" ? "פעיל" : status?.trim() || "לא פעיל"
 
 export default function TrackPage() {
   const navigate = useNavigate()
@@ -100,336 +118,431 @@ export default function TrackPage() {
   const trackIdFromRoute = getRecordIdFromSegment(trackSlug)
 
   const [organizations, setOrganizations] = useState<Organization[]>([])
-  const [point, setPoint] = useState<PointRecord | null>(null)
+  const [loadingOrganizations, setLoadingOrganizations] = useState(true)
+  const [organizationsError, setOrganizationsError] = useState<string | null>(null)
+
   const [track, setTrack] = useState<TrackRecord | null>(null)
-  const [events, setEvents] = useState<EventRow[]>([])
-  const [pointTracks, setPointTracks] = useState<TrackRecord[]>([])
-  const [loading, setLoading] = useState(true)
-  const [advancingError, setAdvancingError] = useState<string | null>(null)
+  const [events, setEvents] = useState<TrackStepperEvent[]>([])
+  const [pointTracks, setPointTracks] = useState<Array<{ id: number; name: string | null; url: string; isActive?: boolean }>>([])
+  const [loadingTrack, setLoadingTrack] = useState(true)
+  const [trackError, setTrackError] = useState<string | null>(null)
   const [pendingTransitionId, setPendingTransitionId] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  const loadPage = useCallback(async (): Promise<LoadedTrackPage> => {
-    if (organizationIdFromRoute === null || pointIdFromRoute === null || trackIdFromRoute === null) {
-      throw new Error("כתובת המסלול אינה תקינה.")
-    }
-
-    const [organizationsResult, pointResult, trackResult, pointTracksResult, eventsResult] = await Promise.all([
-      supabase.from("organizations").select("id, name, status").order("name", { ascending: true, nullsFirst: false }),
-      supabase.from("points").select("id, organization_id, name, notes, status").eq("id", pointIdFromRoute).single<PointRecord>(),
-      supabase
-        .from("tracking_records")
-        .select("id, ref_id, point_id, name, status, current_step, data, notes, track_type:track_types(id, name, form_schema, track_schema)")
-        .eq("id", trackIdFromRoute)
-        .single<TrackingRecordRow>(),
-      supabase
-        .from("tracking_records")
-        .select("id, ref_id, point_id, name, status, current_step, data, notes, track_type:track_types(id, name, form_schema, track_schema)")
-        .eq("point_id", pointIdFromRoute)
-        .order("updated_at", { ascending: false }),
-      supabase
-        .from("tracking_record_events")
-        .select("id, event_type, user_id, step_key, payload, created_at")
-        .eq("tracking_record_id", trackIdFromRoute)
-        .order("created_at", { ascending: false }),
-    ])
-
-    if (organizationsResult.error || pointResult.error || trackResult.error || pointTracksResult.error || eventsResult.error) {
-      console.error("Error loading track page:", {
-        organizationsError: organizationsResult.error,
-        pointError: pointResult.error,
-        trackError: trackResult.error,
-        pointTracksError: pointTracksResult.error,
-        eventsError: eventsResult.error,
-      })
-      throw new Error("לא הצלחנו לטעון את המסלול הזה כרגע.")
-    }
-
-    const nextOrganizations = organizationsResult.data ?? []
-    const nextPoint = pointResult.data
-    const nextTrackRow = trackResult.data
-    const rawEvents = (eventsResult.data ?? []) as EventRow[]
-
-    if (!nextPoint || !nextTrackRow || nextPoint.organization_id !== organizationIdFromRoute || nextTrackRow.point_id !== nextPoint.id) {
-      throw new Error("המסלול הזה לא שייך לנקודה שנבחרה.")
-    }
-
-    const actorIds = Array.from(
-      new Set(
-        rawEvents
-          .map((event) => event.user_id)
-          .filter((value): value is string => Boolean(value))
-      )
-    )
-
-    const actorMap = new Map<string, { display_name: string | null; avatar_url: string | null }>()
-
-    if (actorIds.length > 0) {
-      const { data: actorProfiles, error: actorProfilesError } = await supabase
-        .from("profiles")
-        .select("id, display_name, avatar_url")
-        .in("id", actorIds)
-
-      if (actorProfilesError) {
-        console.error("Error loading event actors:", actorProfilesError)
-      } else {
-        await Promise.all(
-          (actorProfiles ?? []).map(async (profile) => {
-            actorMap.set(profile.id, {
-              display_name: profile.display_name ?? null,
-              avatar_url: (await resolveAvatarUrl(profile.avatar_url)) ?? null,
-            })
-          })
-        )
-      }
-    }
-
-    const buildTrackRecord = (row: TrackingRecordRow) => {
-      const trackType = normalizeTrackType(row.track_type)
-      const currentStep = getCurrentStep(trackType, row.current_step)
-      const organization = nextOrganizations.find((item) => item.id === nextPoint.organization_id)
-      const url = `/${getOrganizationSegment({ id: nextPoint.organization_id, name: organization?.name ?? null })}/${getPointSegment(nextPoint)}/track/${getTrackSegment({ id: row.id, name: row.name || trackType?.name || null })}`
-
-      return {
-        id: row.id,
-        refId: row.ref_id,
-        name: row.name,
-        status: row.status,
-        currentStepKey: row.current_step,
-        data: row.data && typeof row.data === "object" ? (row.data as Record<string, unknown>) : null,
-        notes: row.notes,
-        trackType,
-        currentStep,
-        nextTransitions: currentStep?.transitions ?? [],
-        url,
-      }
-    }
-
-    return {
-      organizations: nextOrganizations,
-      point: nextPoint,
-      track: buildTrackRecord(nextTrackRow),
-      pointTracks: ((pointTracksResult.data ?? []) as TrackingRecordRow[]).map(buildTrackRecord),
-      events: rawEvents.map((event) => {
-        const actor = event.user_id ? actorMap.get(event.user_id) : null
-
-        return {
-          ...event,
-          actor_name: actor?.display_name ?? null,
-          actor_avatar_url: actor?.avatar_url ?? null,
-        }
-      }),
-    }
-  }, [organizationIdFromRoute, pointIdFromRoute, trackIdFromRoute])
 
   useEffect(() => {
     let isMounted = true
 
-    const hydrate = async () => {
-      setLoading(true)
-      setError(null)
+    const loadOrganizations = async () => {
+      setLoadingOrganizations(true)
+      setOrganizationsError(null)
 
       try {
-        const nextState = await loadPage()
+        const nextOrganizations = await getOrganizationsCached()
         if (!isMounted) return
-        setOrganizations(nextState.organizations)
-        setPoint(nextState.point)
-        setTrack(nextState.track)
-        setPointTracks(nextState.pointTracks)
-        setEvents(nextState.events)
-      } catch (err) {
+        setOrganizations(nextOrganizations)
+      } catch (error) {
         if (!isMounted) return
-        setError(err instanceof Error ? err.message : "לא הצלחנו לטעון את המסלול הזה כרגע.")
+        console.error("Error fetching organizations:", error)
+        setOrganizations([])
+        setOrganizationsError("לא הצלחנו לטעון את הארגונים שלך כרגע.")
       } finally {
-        if (isMounted) setLoading(false)
+        if (isMounted) {
+          setLoadingOrganizations(false)
+        }
       }
     }
 
-    void hydrate()
+    void loadOrganizations()
+
     return () => {
       isMounted = false
     }
-  }, [loadPage])
+  }, [])
 
   const selectedOrganization =
     organizations.find((organization) => organization.id === organizationIdFromRoute) ?? null
 
-  const organizationOptions = organizations.map((organization) => ({
-    id: organization.id,
-    label: organization.name?.trim() || `Organization #${organization.id}`,
-  }))
+  const loadTrackPage = useCallback(async () => {
+    if (trackIdFromRoute === null) {
+      setTrack(null)
+      setEvents([])
+      setPointTracks([])
+      setTrackError("כתובת המסלול אינה תקינה.")
+      setLoadingTrack(false)
+      return
+    }
+
+    setLoadingTrack(true)
+    setTrackError(null)
+
+    const { data: trackData, error: trackQueryError } = await supabase
+      .from("tracking_records")
+      .select(
+        "id, ref_id, point_id, track_type_id, name, status, current_step, data, notes, point:points(id, organization_id, name, notes, status), track_type:track_types(id, name, status, form_schema, track_schema, vesrion)"
+      )
+      .eq("id", trackIdFromRoute)
+      .single<TrackingRecordRow>()
+
+    if (trackQueryError || !trackData) {
+      console.error("Error fetching track:", trackQueryError)
+      setTrack(null)
+      setEvents([])
+      setPointTracks([])
+      setTrackError("לא הצלחנו לטעון את המסלול הזה כרגע.")
+      setLoadingTrack(false)
+      return
+    }
+
+    const point = normalizeSingleRow(trackData.point)
+    const trackType = normalizeSingleRow(trackData.track_type)
+    const trackSchema = normalizeTrackSchema(trackType?.track_schema)
+    const currentNode = getTrackCurrentNode(trackSchema, trackData.current_step)
+
+    const nextTrack: TrackRecord = {
+      id: trackData.id,
+      refId: trackData.ref_id,
+      name: trackData.name,
+      status: trackData.status,
+      currentStepKey: trackData.current_step,
+      data: trackData.data,
+      notes: trackData.notes,
+      point,
+      trackType,
+      trackSchema,
+      currentNode,
+    }
+
+    if (!point) {
+      setTrack(nextTrack)
+      setEvents([])
+      setPointTracks([])
+      setTrackError("המסלול הזה אינו משויך לנקודה תקינה.")
+      setLoadingTrack(false)
+      return
+    }
+
+    const [eventsResult, pointTracksResult] = await Promise.all([
+      supabase
+        .from("tracking_record_events")
+        .select("id, user_id, event_type, step_key, payload, created_at")
+        .eq("tracking_record_id", trackData.id)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("tracking_records")
+        .select("id, name, point_id")
+        .eq("point_id", point.id)
+        .order("updated_at", { ascending: false }),
+    ])
+
+    if (eventsResult.error) {
+      console.error("Error fetching track events:", eventsResult.error)
+    }
+
+    if (pointTracksResult.error) {
+      console.error("Error fetching point tracks:", pointTracksResult.error)
+    }
+
+    const rawEvents = (eventsResult.data ?? []) as RawEventRow[]
+    const userIds = rawEvents.map((event) => event.user_id).filter((value): value is string => Boolean(value))
+    const profilesById = await getProfilesByIdsCached(userIds)
+
+    const nextEvents: TrackStepperEvent[] = rawEvents.map((event) => ({
+      ...event,
+      actor_name: event.user_id ? profilesById[event.user_id]?.display_name ?? null : null,
+      actor_avatar_url: event.user_id ? profilesById[event.user_id]?.avatar_url ?? null : null,
+    }))
+
+    const nextPointTracks = (pointTracksResult.data ?? []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      url: `/${getOrganizationSegment({
+        id: point.organization_id,
+        name: selectedOrganization?.name ?? null,
+      })}/${getPointSegment(point)}/track/${getTrackSegment({
+        id: row.id,
+        name: row.name,
+      })}`,
+      isActive: row.id === trackData.id,
+    }))
+
+    setTrack(nextTrack)
+    setEvents(nextEvents)
+    setPointTracks(nextPointTracks)
+    setLoadingTrack(false)
+  }, [trackIdFromRoute, selectedOrganization?.name])
+
+  useEffect(() => {
+    if (loadingOrganizations) return
+    if (organizationsError) return
+
+    if (!selectedOrganization || organizationIdFromRoute === null || pointIdFromRoute === null) {
+      navigate("/dashboard", { replace: true })
+      return
+    }
+
+    void loadTrackPage()
+  }, [
+    loadTrackPage,
+    loadingOrganizations,
+    navigate,
+    organizationIdFromRoute,
+    organizationsError,
+    pointIdFromRoute,
+    selectedOrganization,
+  ])
+
+  useEffect(() => {
+    if (!track || !selectedOrganization || !track.point) return
+
+    const expectedOrganizationSegment = getOrganizationSegment(selectedOrganization)
+    const expectedPointSegment = getPointSegment(track.point)
+    const expectedTrackSegment = getTrackSegment({
+      id: track.id,
+      name: track.name,
+    })
+
+    if (
+      organizationSlug !== expectedOrganizationSegment ||
+      pointSlug !== expectedPointSegment ||
+      trackSlug !== expectedTrackSegment
+    ) {
+      navigate(
+        `/${expectedOrganizationSegment}/${expectedPointSegment}/track/${expectedTrackSegment}`,
+        { replace: true }
+      )
+    }
+  }, [navigate, organizationSlug, pointSlug, selectedOrganization, track, trackSlug])
+
+  const organizationOptions = useMemo(
+    () =>
+      organizations.map((organization) => ({
+        id: organization.id,
+        label: organization.name?.trim() || `ארגון #${organization.id}`,
+      })),
+    [organizations]
+  )
 
   const handleOrganizationChange = (value: string) => {
-    const nextOrganization = organizations.find((organization) => organization.id.toString() === value)
+    const nextOrganization = organizations.find(
+      (organization) => organization.id.toString() === value
+    )
+
     if (!nextOrganization) return
+
     navigate(`/${getOrganizationSegment(nextOrganization)}`)
   }
 
-  const handleTransitionSelect = async (transition: TrackTransition, sourceStep: TrackStep) => {
+  const handleTransitionSelect = async (action: TrackNodeAction, sourceNode: TrackNode) => {
     if (!track) return
 
-    setAdvancingError(null)
-    setPendingTransitionId(transition.id)
-
-    const { error: updateError } = await supabase
-      .from("tracking_records")
-      .update({
-        current_step: transition.to_step,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", track.id)
-
-    if (updateError) {
-      console.error("Error updating track step:", updateError)
-      setAdvancingError("לא הצלחנו לקדם את המסלול כרגע.")
-      setPendingTransitionId(null)
-      return
-    }
-
-    const { error: eventError } = await supabase.from("tracking_record_events").insert({
-      tracking_record_id: track.id,
-      event_type: "step_changed",
-      step_key: transition.to_step,
-      payload: {
-        transition_id: transition.id,
-        from_step: sourceStep.id,
-        to_step: transition.to_step,
-      },
-    })
-
-    if (eventError) {
-      console.error("Error inserting track event:", eventError)
-      setAdvancingError("המעבר בוצע, אבל רישום האירוע נכשל. כדאי לבדוק את היסטוריית המסלול.")
-      setPendingTransitionId(null)
-      return
-    }
+    setPendingTransitionId(action.id)
 
     try {
-      const nextState = await loadPage()
-      setOrganizations(nextState.organizations)
-      setPoint(nextState.point)
-      setTrack(nextState.track)
-      setPointTracks(nextState.pointTracks)
-      setEvents(nextState.events)
-    } catch (err) {
-      console.error("Error reloading track after transition:", err)
-      setAdvancingError("המסלול קודם, אבל התצוגה לא התרעננה עדיין.")
+      const { error: updateError } = await supabase
+        .from("tracking_records")
+        .update({
+          current_step: action.node_id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", track.id)
+
+      if (updateError) {
+        throw updateError
+      }
+
+      const { error: eventError } = await supabase
+        .from("tracking_record_events")
+        .insert({
+          tracking_record_id: track.id,
+          event_type: "step_advance",
+          step_key: sourceNode.id,
+          payload: {
+            transition_id: action.id,
+            transition_label: action.label,
+            from_node_id: sourceNode.id,
+            to_node_id: action.node_id,
+          },
+        })
+
+      if (eventError) {
+        throw eventError
+      }
+
+      await loadTrackPage()
+    } catch (error) {
+      console.error("Error advancing track:", error)
+      setTrackError("לא הצלחנו לקדם את המסלול כרגע.")
     } finally {
       setPendingTransitionId(null)
     }
   }
 
-  const trackSteps = useMemo(() => track?.trackType?.track_schema?.steps ?? [], [track])
+  const currentNodeLabel = track?.currentNode?.title || track?.currentStepKey || "לא הוגדר"
+  const trackNodes = track?.trackSchema?.nodes ?? []
+  const startNodeId = track?.trackSchema?.start_node_id ?? null
+  const pointDescription = track?.point?.notes?.trim() || "עדיין לא נוספו הערות לנקודה הזו."
+  const trackDescription =
+    track?.notes?.trim() ||
+    track?.trackSchema?.description?.trim() ||
+    "המסלול מוצג לפי הצמתים שהרשומה עברה בפועל, יחד עם האירועים ואפשרויות ההמשך מהצומת הנוכחי."
 
   return (
-    <SidebarProvider style={{ "--sidebar-width": "calc(var(--spacing) * 74)", "--header-height": "calc(var(--spacing) * 13)" } as CSSProperties}>
+    <SidebarProvider
+      style={
+        {
+          "--sidebar-width": "calc(var(--spacing) * 72)",
+          "--header-height": "calc(var(--spacing) * 12)",
+        } as CSSProperties
+      }
+    >
       <AppSidebar
         side="right"
         variant="inset"
-        tracks={pointTracks.map((item) => ({
-          id: item.id,
-          name: getTrackTitle(item),
-          url: item.url,
-          isActive: item.id === track?.id,
-        }))}
-        tracksLoading={loading}
+        tracks={pointTracks}
+        tracksLoading={loadingTrack}
       />
-      <SidebarInset>
+      <SidebarInset dir="rtl">
         <SiteHeader
           title="עמוד מסלול"
           organizations={organizationOptions}
           selectedOrganizationId={selectedOrganization?.id.toString()}
           onOrganizationChange={handleOrganizationChange}
         />
+
         <div className="flex flex-1 flex-col">
-          <div className="@container/main flex flex-1 flex-col">
-            <div className="page-shell">
-              <div className="page-stack" dir="rtl">
-              {loading ? (
-                <div className="grid gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
-                    <Card className="border-border/70 shadow-none"><CardHeader><Skeleton className="h-6 w-40" /><Skeleton className="h-4 w-full" /></CardHeader><CardContent className="space-y-3"><Skeleton className="h-24 w-full" /><Skeleton className="h-32 w-full" /></CardContent></Card>
-                    <div className="space-y-5">
-                      <Card className="border-border/70 shadow-none"><CardHeader><Skeleton className="h-6 w-32" /><Skeleton className="h-4 w-64" /></CardHeader><CardContent><Skeleton className="h-48 w-full" /></CardContent></Card>
-                      <Card className="border-border/70 shadow-none"><CardHeader><Skeleton className="h-6 w-32" /></CardHeader><CardContent><Skeleton className="h-40 w-full" /></CardContent></Card>
-                    </div>
-                  </div>
-              ) : error || !track || !point || !selectedOrganization ? (
-                <div>
-                  <Alert variant="destructive">
-                    <CircleAlert className="size-4" />
-                    <AlertTitle>המסלול לא זמין</AlertTitle>
-                    <AlertDescription>{error || "לא הצלחנו לטעון את המסלול הזה כרגע."}</AlertDescription>
-                  </Alert>
+          <div className="page-stack flex-1 px-4 py-6 md:px-6">
+            {organizationsError ? (
+              <Alert variant="destructive">
+                <CircleAlert className="size-4" />
+                <AlertTitle>שגיאה בטעינת ארגונים</AlertTitle>
+                <AlertDescription>{organizationsError}</AlertDescription>
+              </Alert>
+            ) : null}
+
+            {trackError && !loadingTrack ? (
+              <Alert variant="destructive" className="mb-6">
+                <CircleAlert className="size-4" />
+                <AlertTitle>אי אפשר להציג את המסלול</AlertTitle>
+                <AlertDescription>{trackError}</AlertDescription>
+              </Alert>
+            ) : null}
+
+            {loadingTrack ? (
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+                <div className="space-y-6">
+                  <Skeleton className="h-32 rounded-3xl" />
+                  <Skeleton className="h-96 rounded-3xl" />
                 </div>
-              ) : (
-                <div className="grid gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
-                    <Card className="overflow-hidden border-border/70 shadow-none xl:sticky xl:top-24 xl:h-fit">
-                      <CardHeader className="gap-3">
-                        <CardTitle className="flex items-center gap-2"><Route className="size-5" />מבט מסלול</CardTitle>
-                        <CardDescription>תצוגה מלאה של מבנה המסלול, המצב הנוכחי והמידע שנשמר ברשומה.</CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="rounded-xl border border-border bg-primary/5 p-4">
-                          <div className="text-sm font-medium">פרטי מסלול</div>
-                          <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-                            <div>נקודה: {point.name?.trim() || `Point #${point.id}`}</div>
-                            <div>סוג מסלול: {track.trackType?.name?.trim() || `סוג #${track.trackType?.id ?? "—"}`}</div>
-                            <div>מספר ייחוס: {track.refId}</div>
-                          </div>
-                        </div>
-
-                        <div className="rounded-xl border border-border bg-muted/30 p-4">
-                          <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">שלב נוכחי</div>
-                          <div className="mt-2 text-xl font-semibold">{track.currentStep?.title || track.currentStepKey || "לא הוגדר"}</div>
-                          {track.currentStep?.description ? <p className="mt-2 text-sm text-muted-foreground">{track.currentStep.description}</p> : null}
-                        </div>
-
-                        <div className="rounded-xl border border-border bg-muted/30 p-4">
-                          <div className="mb-3 flex items-center gap-2 text-sm font-medium">
-                            <Database className="size-4" />
-                            סיכום הרשומה
-                          </div>
-                          <TrackRecordData
-                            data={track.data}
-                            compact
-                          />
-                        </div>
-
-                        {advancingError ? (
-                          <Alert variant="destructive">
-                            <AlertTitle>עדכון המסלול נכשל</AlertTitle>
-                            <AlertDescription>{advancingError}</AlertDescription>
-                          </Alert>
-                        ) : null}
-                      </CardContent>
-                    </Card>
-
-                    <div className="space-y-5">
-                      <Card className="overflow-hidden border-border/70 shadow-none">
-                        <CardHeader>
-                          <CardTitle className="flex items-center gap-2"><Route className="size-5" />שלבי המסלול</CardTitle>
-                          <CardDescription>המסלול מוצג בציר אנכי מלמעלה למטה לפי הסדר המוגדר ב-`track_schema`.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          {trackSteps.length === 0 ? (
-                            <Alert><AlertTitle>אין שלבים מוגדרים</AlertTitle><AlertDescription>לסוג המסלול הזה עדיין אין מבנה שלבים זמין.</AlertDescription></Alert>
-                          ) : (
-                            <TrackStepper
-                              steps={trackSteps}
-                              currentStepKey={track.currentStep?.id || track.currentStepKey}
-                              events={events as TrackStepperEvent[]}
-                              pendingTransitionId={pendingTransitionId}
-                              onTransitionSelect={handleTransitionSelect}
-                            />
-                          )}
-                        </CardContent>
-                      </Card>
-
-                    </div>
-                </div>
-              )}
+                <Skeleton className="h-[32rem] rounded-3xl" />
               </div>
-            </div>
+            ) : track ? (
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+                <div className="space-y-6">
+                  <Card className="border-border/70 shadow-none">
+                    <CardHeader className="gap-4">
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div className="space-y-2">
+                          <CardTitle className="text-3xl tracking-tight">
+                            {getTrackRecordTitle(track)}
+                          </CardTitle>
+                          <CardDescription className="max-w-3xl leading-7">
+                            {trackDescription}
+                          </CardDescription>
+                        </div>
+                        <Badge variant="outline" className="rounded-full px-3 py-1">
+                          {getStatusLabel(track.status)}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                  </Card>
+
+                  <Card className="border-border/70 shadow-none">
+                    <CardHeader className="gap-2">
+                      <CardTitle className="text-xl">מהלך המסלול</CardTitle>
+                      <CardDescription>
+                        כל צומת מציג את האירועים שקרו בו בפועל, ואת אפשרויות ההמשך הזמינות מהצומת הנוכחי.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <TrackStepper
+                        nodes={trackNodes}
+                        startNodeId={startNodeId}
+                        currentNodeId={track.currentNode?.id || track.currentStepKey}
+                        events={events}
+                        pendingTransitionId={pendingTransitionId}
+                        onTransitionSelect={handleTransitionSelect}
+                      />
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <InfoPanel>
+                  <InfoPanelHeader
+                    icon={Route}
+                    title={getTrackRecordTitle(track)}
+                    description={track.trackType?.name?.trim() || "מסלול פעיל"}
+                    badge={
+                      <Badge variant={track.status === "active" ? "default" : "secondary"}>
+                        {getStatusLabel(track.status)}
+                      </Badge>
+                    }
+                  />
+                  <InfoPanelBody>
+                    <InfoPanelStats>
+                      <InfoPanelStat
+                        icon={TimerReset}
+                        label="צומת נוכחי"
+                        value={currentNodeLabel}
+                        description="זהו הצומת הפעיל שממנו אפשר להמשיך."
+                      />
+                      <InfoPanelStat
+                        icon={Rows3}
+                        label="אירועים"
+                        value={events.length}
+                        description="כולל קידומי מסלול והערות כלליות."
+                      />
+                    </InfoPanelStats>
+
+                    <InfoPanelSection icon={MapPinned} title="הקשר נקודה">
+                      <InfoPanelDetailList>
+                        <InfoPanelDetail
+                          label="שם נקודה"
+                          value={track.point?.name?.trim() || `נקודה #${track.point?.id ?? "?"}`}
+                        />
+                        <InfoPanelDetail label="סטטוס" value={getStatusLabel(track.point?.status)} />
+                        <InfoPanelDetail label="תיאור" value={pointDescription} />
+                      </InfoPanelDetailList>
+                    </InfoPanelSection>
+
+                    <InfoPanelSection icon={Building2} title="הקשר ארגוני">
+                      <InfoPanelDetailList>
+                        <InfoPanelDetail
+                          label="ארגון"
+                          value={selectedOrganization?.name?.trim() || `ארגון #${selectedOrganization?.id ?? "?"}`}
+                        />
+                        <InfoPanelDetail
+                          label="מזהה חיצוני"
+                          value={track.refId}
+                        />
+                        <InfoPanelDetail
+                          label="גרסת תבנית"
+                          value={track.trackType?.vesrion ?? "—"}
+                        />
+                      </InfoPanelDetailList>
+                    </InfoPanelSection>
+
+                    <InfoPanelSection title="סיכום הרשומה">
+                      <TrackRecordData data={track.data} compact />
+                    </InfoPanelSection>
+                  </InfoPanelBody>
+                </InfoPanel>
+              </div>
+            ) : (
+              <Alert variant="destructive">
+                <CircleAlert className="size-4" />
+                <AlertTitle>מסלול לא זמין</AlertTitle>
+                <AlertDescription>לא נמצאה רשומת מסלול להצגה.</AlertDescription>
+              </Alert>
+            )}
           </div>
         </div>
       </SidebarInset>

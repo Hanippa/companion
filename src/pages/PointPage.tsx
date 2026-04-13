@@ -12,6 +12,16 @@ import {
 } from "lucide-react"
 
 import { AppSidebar } from "@/components/app-sidebar"
+import {
+  InfoPanel,
+  InfoPanelBody,
+  InfoPanelDetail,
+  InfoPanelDetailList,
+  InfoPanelHeader,
+  InfoPanelSection,
+  InfoPanelStat,
+  InfoPanelStats,
+} from "@/components/info-panel"
 import { SiteHeader } from "@/components/site-header"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -28,16 +38,21 @@ import {
   getRecordIdFromSegment,
   getTrackSegment,
 } from "@/lib/drilldown"
+import {
+  getTrackCurrentNode,
+  normalizeTrackSchema,
+  type NormalizedTrackSchema,
+  type TrackNode,
+  type TrackNodeConnection,
+} from "@/lib/track-schema"
 import { supabase } from "@/lib/supabase"
 
 type Organization = { id: number; name: string | null; notes: string | null; status: string | null }
 type PointRecord = { id: number; organization_id: number; name: string | null; notes: string | null; status: string | null }
 type ProfileRecord = { id: string; display_name: string | null; avatar_url: string | null }
 type PointMember = { point_id: number; user_id: string; role: string | null; status: string | null; title?: string | null; profile: ProfileRecord | null; avatarUrl?: string }
-type TrackTransition = { id: string; label: string; to_step: string }
-type TrackStep = { id: string; title: string; description?: string | null; transitions?: TrackTransition[] }
-type TrackSchema = { version?: number; title?: string | null; description?: string | null; initial_step?: string | null; steps?: TrackStep[] }
-type TrackType = { id: number; name: string | null; status: string | null; form_schema: unknown; track_schema: TrackSchema | null; vesrion: number | null }
+type TrackSchema = NormalizedTrackSchema | Record<string, unknown> | null
+type TrackType = { id: number; name: string | null; status: string | null; form_schema: unknown; track_schema: TrackSchema; vesrion: number | null }
 type TrackingRecordRow = {
   id: number
   ref_id: number
@@ -59,8 +74,8 @@ type TrackRecord = {
   data: Record<string, unknown> | null
   notes: string | null
   trackType: TrackType | null
-  currentStep: TrackStep | null
-  nextTransitions: TrackTransition[]
+  currentNode: TrackNode | null
+  nextConnections: TrackNodeConnection[]
   url: string
 }
 
@@ -73,19 +88,11 @@ const formatMemberMeta = (member: PointMember) =>
 const normalizeTrackType = (trackType: TrackType | TrackType[] | null) =>
   Array.isArray(trackType) ? trackType[0] ?? null : trackType
 
-const getCurrentStep = (trackType: TrackType | null, currentStepKey: string | null) => {
-  const steps = trackType?.track_schema?.steps ?? []
-  if (currentStepKey) {
-    const match = steps.find((step) => step.id === currentStepKey)
-    if (match) return match
-  }
-  const initialStepKey = trackType?.track_schema?.initial_step
-  if (initialStepKey) return steps.find((step) => step.id === initialStepKey) ?? null
-  return steps[0] ?? null
-}
-
 const getTrackRecordTitle = (track: TrackRecord) =>
   track.name?.trim() || track.trackType?.name?.trim() || `רשומת מסלול #${track.id}`
+
+const getStatusLabel = (status: string | null | undefined) =>
+  status === "active" ? "פעיל" : status?.trim() || "לא פעיל"
 
 export default function PointPage() {
   const { user } = useAuth()
@@ -109,6 +116,7 @@ export default function PointPage() {
   const [loadingPermissions, setLoadingPermissions] = useState(true)
   const [pointName, setPointName] = useState("")
   const [pointNotes, setPointNotes] = useState("")
+  const [pointStatus, setPointStatus] = useState<string | null>(null)
 
   useEffect(() => {
     let isMounted = true
@@ -238,6 +246,7 @@ export default function PointPage() {
 
       setPointName(point.name?.trim() || "")
       setPointNotes(point.notes?.trim() || "")
+      setPointStatus(point.status ?? null)
       setLoadingPoint(false)
 
       if (tracksResult.error) {
@@ -247,7 +256,8 @@ export default function PointPage() {
       } else {
         const nextTracks = ((tracksResult.data ?? []) as TrackingRecordRow[]).map((trackRow) => {
           const trackType = normalizeTrackType(trackRow.track_type)
-          const currentStep = getCurrentStep(trackType, trackRow.current_step)
+          const normalizedTrackSchema = normalizeTrackSchema(trackType?.track_schema)
+          const currentNode = getTrackCurrentNode(normalizedTrackSchema, trackRow.current_step)
           const trackSegment = getTrackSegment({
             id: trackRow.id,
             name: trackRow.name || trackType?.name || null,
@@ -260,9 +270,14 @@ export default function PointPage() {
             currentStepKey: trackRow.current_step,
             data: trackRow.data && typeof trackRow.data === "object" ? (trackRow.data as Record<string, unknown>) : null,
             notes: trackRow.notes,
-            trackType,
-            currentStep,
-            nextTransitions: currentStep?.transitions ?? [],
+            trackType: trackType
+              ? {
+                  ...trackType,
+                  track_schema: normalizedTrackSchema,
+                }
+              : null,
+            currentNode,
+            nextConnections: currentNode?.next_nodes ?? [],
             url: `/${getOrganizationSegment(selectedOrganization)}/${getPointSegment(point)}/track/${trackSegment}`,
           }
         })
@@ -329,9 +344,15 @@ export default function PointPage() {
   const currentPoint = useMemo(
     () =>
       pointIdFromRoute !== null
-        ? { id: pointIdFromRoute, organization_id: selectedOrganization?.id ?? 0, name: pointName || null, notes: pointNotes || null, status: null }
+        ? {
+            id: pointIdFromRoute,
+            organization_id: selectedOrganization?.id ?? 0,
+            name: pointName || null,
+            notes: pointNotes || null,
+            status: pointStatus,
+          }
         : null,
-    [pointIdFromRoute, pointName, pointNotes, selectedOrganization?.id]
+    [pointIdFromRoute, pointName, pointNotes, pointStatus, selectedOrganization?.id]
   )
 
   const handleOrganizationChange = (value: string) => {
@@ -361,15 +382,21 @@ export default function PointPage() {
               <div className="page-stack" dir="rtl">
               {loadingOrganizations || loadingPoint ? (
                 <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
-                    <Card className="rounded-[2rem] xl:sticky xl:top-24 xl:h-fit">
-                      <CardHeader><Skeleton className="h-6 w-40" /><Skeleton className="h-4 w-full" /></CardHeader>
-                      <CardContent className="space-y-4">
-                        <Skeleton className="h-20 w-full" />
-                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1"><Skeleton className="h-20 w-full" /><Skeleton className="h-20 w-full" /></div>
-                        <Skeleton className="h-28 w-full" />
-                        <Skeleton className="h-10 w-full" />
+                    <InfoPanel>
+                      <CardHeader>
+                        <Skeleton className="h-8 w-40" />
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-5/6" />
+                      </CardHeader>
+                      <CardContent className="space-y-5">
+                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                          <Skeleton className="h-24 w-full rounded-xl" />
+                          <Skeleton className="h-24 w-full rounded-xl" />
+                        </div>
+                        <Skeleton className="h-28 w-full rounded-xl" />
+                        <Skeleton className="h-28 w-full rounded-xl" />
                       </CardContent>
-                    </Card>
+                    </InfoPanel>
                     <div className="space-y-5">
                       <Card className="rounded-[2rem]">
                         <CardHeader><Skeleton className="h-6 w-32" /><Skeleton className="h-4 w-64" /></CardHeader>
@@ -399,55 +426,95 @@ export default function PointPage() {
                 </div>
               ) : (
                 <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
-                    <Card className="overflow-hidden border-border/70 shadow-none xl:sticky xl:top-24 xl:h-fit">
-                      <CardHeader className="gap-3">
-                        <CardTitle className="flex items-center gap-2"><MapPinned className="size-5" />פרטי נקודה</CardTitle>
-                        <CardDescription>מבט מרוכז על הצוות, המסלולים והמידע המשלים של הנקודה.</CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        <div className="rounded-xl border border-border bg-primary/5 p-4">
-                          <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground"><Building2 className="size-3.5" />ארגון</div>
-                          <div className="mt-2 text-base font-semibold leading-tight">{selectedOrganization.name?.trim() || `Organization #${selectedOrganization.id}`}</div>
-                          <div className="mt-3 flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-background/80 px-2.5 py-1 text-xs text-muted-foreground ring-1 ring-border/50">{selectedOrganization.status || "active"}</span>
-                            {canEdit ? <span className="rounded-full bg-background/80 px-2.5 py-1 text-xs text-muted-foreground ring-1 ring-border/50">גישת ניהול</span> : null}
-                          </div>
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                          <div className="rounded-xl border border-border bg-muted/30 p-3.5">
-                            <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">מסלולים</div>
-                            <div className="mt-1.5 text-2xl font-semibold">{tracks.length}</div>
-                            <div className="mt-1 text-xs text-muted-foreground">רשומות מסלול פעילות בנקודה הזו</div>
-                          </div>
-                          <div className="rounded-xl border border-border bg-muted/30 p-3.5">
-                            <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">חברים</div>
-                            <div className="mt-1.5 text-2xl font-semibold">{members.length}</div>
-                            <div className="mt-1 text-xs text-muted-foreground">משויכים כרגע לנקודה הזו</div>
-                          </div>
-                        </div>
-                        <div className="rounded-xl border border-border bg-muted/30 p-4">
-                          <div className="flex items-center gap-2 text-sm font-medium"><MapPinned className="size-4 text-primary" />הערות וסיכום</div>
-                          <div className="mt-3"><p className="text-sm leading-6 text-muted-foreground">{pointNotes || "עדיין לא נוספו הערות לנקודה הזו."}</p></div>
-                        </div>
-                        <div className="rounded-[1.2rem] border border-dashed border-border/70 bg-[rgba(248,249,244,0.9)] p-4">
-                          <div className="flex items-center gap-2 text-sm font-medium"><ShieldCheck className="size-4 text-primary" />גישה וניהול</div>
-                          <div className="mt-1 text-sm text-muted-foreground">עריכת הנקודה נשארת בעמוד נפרד כדי לשמור על תצוגת הקריאה נקייה ופשוטה.</div>
-                        </div>
-                        {canEdit ? (
-                          <Button
-                            variant="outline"
-                            className="w-full"
-                            onClick={() => navigate(`/${getOrganizationSegment(selectedOrganization)}/${getPointSegment(currentPoint ?? { id: pointIdFromRoute ?? 0, organization_id: selectedOrganization.id, name: pointName || null, notes: pointNotes || null, status: null })}/edit`)}
-                            disabled={loadingPermissions || !currentPoint}
+                    <InfoPanel>
+                      <InfoPanelHeader
+                        icon={MapPinned}
+                        title={pointName || `נקודה #${pointIdFromRoute ?? "—"}`}
+                        description={pointNotes || "עדיין לא נוספו הערות לנקודה הזו."}
+                        badge={
+                          <Badge
+                            variant={pointStatus === "active" ? "default" : "outline"}
+                            className="rounded-full"
                           >
-                            <PencilLine className="size-4" />
-                            עריכת נקודה
-                          </Button>
-                        ) : (
-                          <Alert><AlertTitle>תצוגה לקריאה בלבד</AlertTitle><AlertDescription>עריכה זמינה רק לבעלי הארגון ולמנהלים.</AlertDescription></Alert>
-                        )}
-                      </CardContent>
-                    </Card>
+                            {getStatusLabel(pointStatus)}
+                          </Badge>
+                        }
+                      />
+
+                      <InfoPanelBody>
+                        <InfoPanelStats>
+                          <InfoPanelStat
+                            icon={Route}
+                            label="מסלולים"
+                            value={tracks.length}
+                            description="רשומות מסלול פעילות בנקודה הזו"
+                          />
+                          <InfoPanelStat
+                            icon={Users}
+                            label="חברים"
+                            value={members.length}
+                            description="משויכים כרגע לנקודה הזו"
+                          />
+                        </InfoPanelStats>
+
+                        <InfoPanelSection
+                          icon={Building2}
+                          title="ארגון"
+                          description="הנקודה מוצגת בתוך ההקשר הארגוני שלה."
+                        >
+                          <InfoPanelDetailList>
+                            <InfoPanelDetail
+                              label="שם הארגון"
+                              value={selectedOrganization.name?.trim() || `ארגון #${selectedOrganization.id}`}
+                            />
+                            <InfoPanelDetail
+                              label="סטטוס ארגון"
+                              value={getStatusLabel(selectedOrganization.status)}
+                            />
+                          </InfoPanelDetailList>
+                        </InfoPanelSection>
+
+                        <InfoPanelSection
+                          icon={ShieldCheck}
+                          title="גישה וניהול"
+                          description={
+                            canEdit
+                              ? "עריכת הנקודה נשארת בעמוד נפרד כדי לשמור על תצוגת הקריאה נקייה ופשוטה."
+                              : "עריכה זמינה רק לבעלי הארגון ולמנהלים."
+                          }
+                          action={
+                            canEdit ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="rounded-xl"
+                                onClick={() =>
+                                  navigate(
+                                    `/${getOrganizationSegment(selectedOrganization)}/${getPointSegment(
+                                      currentPoint ?? {
+                                        id: pointIdFromRoute ?? 0,
+                                        organization_id: selectedOrganization.id,
+                                        name: pointName || null,
+                                        notes: pointNotes || null,
+                                        status: pointStatus,
+                                      }
+                                    )}/edit`
+                                  )
+                                }
+                                disabled={loadingPermissions || !currentPoint}
+                              >
+                                <PencilLine className="size-4" />
+                                עריכת נקודה
+                              </Button>
+                            ) : (
+                              <Badge variant="outline" className="rounded-full">
+                                קריאה בלבד
+                              </Badge>
+                            )
+                          }
+                        />
+                      </InfoPanelBody>
+                    </InfoPanel>
 
                     <div className="space-y-5">
                       <Card className="overflow-hidden border-border/70 shadow-none">
@@ -469,7 +536,7 @@ export default function PointPage() {
                                       organization_id: selectedOrganization.id,
                                       name: pointName || null,
                                       notes: pointNotes || null,
-                                      status: null,
+                                      status: pointStatus,
                                     }
                                   )}/track/new`
                                 )
@@ -498,19 +565,19 @@ export default function PointPage() {
                                     <CardDescription className="space-y-1">
                                       <div>סוג מסלול: {track.trackType?.name?.trim() || `סוג #${track.trackType?.id ?? "—"}`}</div>
                                       <div>מספר ייחוס: {track.refId}</div>
-                                      <div>שלב נוכחי: {track.currentStep?.title || track.currentStepKey || "לא הוגדר"}</div>
+                                      <div>צומת נוכחי: {track.currentNode?.title || track.currentStepKey || "לא הוגדר"}</div>
                                     </CardDescription>
                                   </CardHeader>
                                   <CardContent className="space-y-4">
-                                    {track.currentStep?.description ? <div className="rounded-xl border border-border bg-muted/30 p-3 text-sm leading-6 text-muted-foreground">{track.currentStep.description}</div> : null}
+                                    {track.currentNode?.description ? <div className="rounded-xl border border-border bg-muted/30 p-3 text-sm leading-6 text-muted-foreground">{track.currentNode.description}</div> : null}
                                     {track.notes ? <div className="text-sm text-muted-foreground">{track.notes}</div> : null}
                                     <div className="space-y-2">
                                       <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">צעדי המשך זמינים</div>
-                                      {track.nextTransitions.length === 0 ? (
+                                      {track.nextConnections.length === 0 ? (
                                         <div className="text-sm text-muted-foreground">אין מעבר זמין לשלב הבא עבור המסלול הזה כרגע.</div>
                                       ) : (
                                         <div className="flex flex-wrap gap-2">
-                                          {track.nextTransitions.map((transition) => (
+                                          {track.nextConnections.map((transition) => (
                                             <Badge key={transition.id} variant="secondary" className="gap-1 rounded-full px-3 py-1">
                                               <ArrowRight className="size-3" />
                                               {transition.label}

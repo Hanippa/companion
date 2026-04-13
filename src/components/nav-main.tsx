@@ -1,11 +1,8 @@
 import { Link, useLocation } from "react-router-dom"
 import { CirclePlusIcon } from "lucide-react"
-
-import { Button } from "@/components/ui/button"
 import {
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -32,20 +29,30 @@ export function NavMain({
 
   return (
     <SidebarGroup dir="rtl">
-      <SidebarGroupLabel>ראשי</SidebarGroupLabel>
-      <SidebarGroupContent className="space-y-3">
-        <Button className="h-11 w-full justify-start rounded-xl bg-primary text-black shadow-none transition hover:bg-primary/90">
-          <CirclePlusIcon className="size-4" />
-          יצירה מהירה
-        </Button>
-        <SidebarMenu className="space-y-1">
+      <SidebarGroupContent className="flex flex-col gap-3">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              tooltip="יצירה מהירה"
+              className="min-w-8 bg-primary text-black transition-colors hover:bg-primary/90 hover:text-black active:bg-primary/90 active:text-black"
+            >
+              <button type="button">
+                <CirclePlusIcon className="size-4" />
+                <span>יצירה מהירה</span>
+              </button>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+
+        <SidebarMenu>
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton
                 asChild
                 tooltip={item.title}
                 isActive={isItemActive(item.url)}
-                className="h-10 rounded-xl text-sm hover:bg-sidebar-accent/80 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium"
+                className="text-sm data-[active=true]:font-medium"
               >
                 <Link to={item.url}>
                   {item.icon}

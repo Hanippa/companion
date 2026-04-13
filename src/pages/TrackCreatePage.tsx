@@ -26,6 +26,7 @@ import {
   getTrackSegment,
 } from "@/lib/drilldown"
 import { supabase } from "@/lib/supabase"
+import { normalizeTrackSchema } from "@/lib/track-schema"
 
 type Organization = { id: number; name: string | null; status: string | null }
 type PointRecord = { id: number; organization_id: number; name: string | null; notes: string | null; status: string | null }
@@ -39,8 +40,13 @@ type FormField = {
   nodes?: FormNode[]
 }
 type FormSection = { id: string; title: string; fields: FormField[] }
-type TrackStep = { id: string; title: string }
-type TrackSchema = { initial_step?: string | null; steps?: TrackStep[] }
+type TrackNode = { id: string; title: string }
+type TrackSchema = {
+  start_node_id?: string | null
+  initial_step?: string | null
+  nodes?: TrackNode[]
+  steps?: TrackNode[]
+}
 type FormSchema = { title?: string | null; sections?: FormSection[] }
 type TrackType = {
   id: number
@@ -74,8 +80,8 @@ const buildInitialFormData = (trackType: TrackType | null) => {
 }
 
 const getInitialStepKey = (trackType: TrackType | null) => {
-  if (!trackType?.track_schema) return null
-  return trackType.track_schema.initial_step || trackType.track_schema.steps?.[0]?.id || null
+  const schema = normalizeTrackSchema(trackType?.track_schema)
+  return schema?.start_node_id || schema?.nodes[0]?.id || null
 }
 
 const resolveRefId = (data: Record<string, Record<string, unknown>>) => {
@@ -372,9 +378,10 @@ export default function TrackCreatePage() {
 
     await supabase.from("tracking_record_events").insert({
       tracking_record_id: insertedRecord.id,
-      event_type: "created",
+      event_type: "general",
       step_key: currentStep,
       payload: {
+        kind: "created",
         track_type_id: selectedTrackType.id,
         track_name: name,
       },
@@ -448,11 +455,12 @@ export default function TrackCreatePage() {
                             </SelectContent>
                           </Select>
                         </div>
-                        {selectedTrackType?.track_schema?.steps?.length ? (
+                        {normalizeTrackSchema(selectedTrackType?.track_schema)?.nodes.length ? (
                           <div className="rounded-3xl border border-dashed border-border/60 bg-background/70 p-4">
-                            <div className="text-sm font-medium">שלב פתיחה</div>
+                            <div className="text-sm font-medium">צומת פתיחה</div>
                             <div className="mt-2 text-sm text-muted-foreground">
-                              {selectedTrackType.track_schema.steps.find((step) => step.id === getInitialStepKey(selectedTrackType))?.title || getInitialStepKey(selectedTrackType)}
+                              {normalizeTrackSchema(selectedTrackType?.track_schema)?.nodes.find((node) => node.id === getInitialStepKey(selectedTrackType))?.title ||
+                                getInitialStepKey(selectedTrackType)}
                             </div>
                           </div>
                         ) : null}

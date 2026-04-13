@@ -99,22 +99,24 @@ export function AppSidebar({
   }))
 
   return (
-    <Sidebar collapsible="offcanvas" {...props}>
-      <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
+    <Sidebar variant="inset" collapsible="offcanvas" {...props}>
+      <SidebarHeader>
         <SidebarMenu dir="rtl">
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
               size="lg"
-              className="h-14 rounded-2xl border border-sidebar-border bg-sidebar px-3"
+              className="data-[slot=sidebar-menu-button]:!p-2"
             >
               <Link to="/dashboard" className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-xl bg-primary/15">
+                <div className="flex size-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
                   <img className="size-5 shrink-0" src={Logo} alt="" />
                 </div>
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold leading-none">companion</div>
-                  <div className="truncate pt-1 text-xs text-sidebar-foreground/65">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold leading-none">
+                    companion
+                  </div>
+                  <div className="truncate pt-1 text-xs text-sidebar-foreground/70">
                     סביבת עבודה חכמה
                   </div>
                 </div>
@@ -124,7 +126,7 @@ export function AppSidebar({
         </SidebarMenu>
       </SidebarHeader>
 
-      <SidebarContent className="gap-4 px-3 py-4">
+      <SidebarContent>
         <NavMain items={navMain} />
         <NavDocuments
           label="מסלולים"
@@ -135,7 +137,7 @@ export function AppSidebar({
         <NavSecondary items={navSecondary} className="mt-auto" />
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border px-3 py-4">
+      <SidebarFooter>
         <NavUser
           user={{
             name: profile?.display_name,

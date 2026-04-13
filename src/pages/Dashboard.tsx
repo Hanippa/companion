@@ -1,16 +1,24 @@
 import { useEffect, useState, type CSSProperties } from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { useLocation, useNavigate, useParams } from "react-router-dom"
 import {
   ArrowLeft,
   Building2,
-  CheckCircle2,
   CircleAlert,
+  GitBranchPlus,
   MapPinned,
   Route,
   Users2,
 } from "lucide-react"
 
 import { AppSidebar } from "@/components/app-sidebar"
+import {
+  InfoPanel,
+  InfoPanelBody,
+  InfoPanelHeader,
+  InfoPanelSection,
+  InfoPanelStat,
+  InfoPanelStats,
+} from "@/components/info-panel"
 import { SiteHeader } from "@/components/site-header"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
@@ -22,7 +30,14 @@ import {
 } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { useAuth } from "@/contexts/AuthContext"
@@ -32,9 +47,17 @@ import {
   getPointSegment,
   getRecordIdFromSegment,
 } from "@/lib/drilldown"
+import {
+  dashboardLoadFixture,
+  isDashboardMockMode,
+  type MockDashboardPoint,
+} from "@/lib/mock/dashboard-load-fixture"
 import { getOrganizationsCached } from "@/lib/organizations"
 import { getProfilesByIdsCached } from "@/lib/profile-cache"
 import { supabase } from "@/lib/supabase"
+
+const ORGANIZATION_MEMBER_PREVIEW_LIMIT = 20
+const POINT_MEMBER_AVATAR_LIMIT = 3
 
 type Organization = {
   id: number
@@ -63,11 +86,28 @@ type ProfileSummary = {
   avatar_url: string | null
 }
 
+const getOrganizationLabel = (organization: Organization) =>
+  organization.name?.trim() || `ארגון #${organization.id}`
+
+const getPointLabel = (point: Point) => point.name?.trim() || `נקודה #${point.id}`
+
+const getStatusLabel = (status: string | null | undefined) =>
+  status === "active" ? "פעיל" : status?.trim() || "לא פעיל"
+
+const getOrganizationDescription = (organization: Organization) =>
+  organization.notes?.trim() || "עדיין לא נוסף תיאור לארגון הזה."
+
+const getPointDescription = (point: Point) =>
+  point.notes?.trim() || "עדיין לא נוספו הערות לנקודה הזו."
+
 export default function Dashboard() {
   const { user } = useAuth()
+  const location = useLocation()
   const navigate = useNavigate()
   const { organizationSlug } = useParams()
   const organizationIdFromRoute = getRecordIdFromSegment(organizationSlug)
+  const useMockMembers =
+    location.pathname === "/dashboard" && isDashboardMockMode(location.search)
 
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [selectedOrganizationId, setSelectedOrganizationId] = useState("")
@@ -78,6 +118,7 @@ export default function Dashboard() {
   const [organizationMembersCount, setOrganizationMembersCount] = useState(0)
   const [organizationMemberIds, setOrganizationMemberIds] = useState<string[]>([])
   const [profilesById, setProfilesById] = useState<Record<string, ProfileSummary>>({})
+  const [canManageTrackTypes, setCanManageTrackTypes] = useState(false)
   const [loadingPoints, setLoadingPoints] = useState(false)
   const [pointsError, setPointsError] = useState<string | null>(null)
 
@@ -87,6 +128,26 @@ export default function Dashboard() {
     const fetchOrganizations = async () => {
       setLoadingOrganizations(true)
       setOrganizationsError(null)
+
+      if (useMockMembers) {
+        const nextOrganizations = dashboardLoadFixture.organizations
+
+        if (!isMounted) return
+
+        setOrganizations(nextOrganizations)
+        setSelectedOrganizationId((currentValue) => {
+          if (
+            currentValue &&
+            nextOrganizations.some((organization) => organization.id.toString() === currentValue)
+          ) {
+            return currentValue
+          }
+
+          return nextOrganizations[0] ? nextOrganizations[0].id.toString() : ""
+        })
+        setLoadingOrganizations(false)
+        return
+      }
 
       try {
         const nextOrganizations = await getOrganizationsCached()
@@ -118,7 +179,9 @@ export default function Dashboard() {
       }
     }
 
-    if (user) {
+    if (useMockMembers) {
+      void fetchOrganizations()
+    } else if (user) {
       void fetchOrganizations()
     } else {
       setOrganizations([])
@@ -129,7 +192,7 @@ export default function Dashboard() {
     return () => {
       isMounted = false
     }
-  }, [user])
+  }, [user, useMockMembers])
 
   const selectedOrganization =
     organizations.find((organization) => {
@@ -147,7 +210,9 @@ export default function Dashboard() {
 
     if (!organizationSlug) {
       if (organizations.length === 1) {
-        navigate(`/${getOrganizationSegment(organizations[0])}`, { replace: true })
+        navigate(`/${getOrganizationSegment(organizations[0])}${location.search}`, {
+          replace: true,
+        })
       }
       return
     }
@@ -163,10 +228,11 @@ export default function Dashboard() {
 
     const expectedSegment = getOrganizationSegment(selectedOrganization)
     if (expectedSegment !== organizationSlug) {
-      navigate(`/${expectedSegment}`, { replace: true })
+      navigate(`/${expectedSegment}${location.search}`, { replace: true })
     }
   }, [
     loadingOrganizations,
+    location.search,
     organizations,
     organizationsError,
     navigate,
@@ -192,6 +258,29 @@ export default function Dashboard() {
       setLoadingPoints(true)
       setPointsError(null)
 
+      if (useMockMembers) {
+        const nextPoints =
+          (dashboardLoadFixture.pointsByOrganization[
+            selectedOrganization.id
+          ] as MockDashboardPoint[] | undefined) ?? []
+        const nextOrganizationMemberIds =
+          dashboardLoadFixture.organizationMemberIdsByOrganization[
+            selectedOrganization.id
+          ] ?? []
+
+        if (!isMounted) return
+
+        setPoints(
+          nextPoints.map(({ membersCount, tracksCount, memberIds, ...point }) => point)
+        )
+        setPointsWithStats(nextPoints)
+        setOrganizationMembersCount(nextOrganizationMemberIds.length)
+        setOrganizationMemberIds(nextOrganizationMemberIds)
+        setCanManageTrackTypes(true)
+        setLoadingPoints(false)
+        return
+      }
+
       const [pointsResult, membersResult] = await Promise.all([
         supabase
           .from("points")
@@ -200,7 +289,7 @@ export default function Dashboard() {
           .order("name", { ascending: true, nullsFirst: false }),
         supabase
           .from("organization_users")
-          .select("user_id")
+          .select("user_id, role")
           .eq("organization_id", selectedOrganization.id)
           .eq("status", "active"),
       ])
@@ -216,13 +305,20 @@ export default function Dashboard() {
         setPointsWithStats([])
         setOrganizationMembersCount(0)
         setOrganizationMemberIds([])
+        setCanManageTrackTypes(false)
         setPointsError("לא הצלחנו לטעון את הנקודות של הארגון הזה כרגע.")
         setLoadingPoints(false)
         return
       }
 
       const nextPoints = (pointsResult.data ?? []) as Point[]
-      const nextOrganizationMemberIds = (membersResult.data ?? []).map((member) => member.user_id)
+      const organizationMembers = membersResult.data ?? []
+      const nextOrganizationMemberIds = organizationMembers.map((member) => member.user_id)
+      setCanManageTrackTypes(
+        organizationMembers.some(
+          (member) => member.user_id === user?.id && member.role === "owner"
+        )
+      )
 
       setPoints(nextPoints)
       setOrganizationMembersCount(nextOrganizationMemberIds.length)
@@ -293,7 +389,7 @@ export default function Dashboard() {
     return () => {
       isMounted = false
     }
-  }, [selectedOrganization])
+  }, [selectedOrganization, useMockMembers, user?.id])
 
   useEffect(() => {
     let isMounted = true
@@ -301,13 +397,29 @@ export default function Dashboard() {
     const loadProfiles = async () => {
       const allIds = Array.from(
         new Set([
-          ...organizationMemberIds,
-          ...pointsWithStats.flatMap((point) => point.memberIds),
+          ...organizationMemberIds.slice(0, ORGANIZATION_MEMBER_PREVIEW_LIMIT),
+          ...pointsWithStats.flatMap((point) =>
+            point.memberIds.slice(0, POINT_MEMBER_AVATAR_LIMIT)
+          ),
         ])
       )
 
       if (allIds.length === 0) {
         setProfilesById({})
+        return
+      }
+
+      if (useMockMembers) {
+        const nextProfilesById = Object.fromEntries(
+          allIds.flatMap((userId) => {
+            const profile = dashboardLoadFixture.profilesById[userId]
+            return profile ? ([[userId, profile]] as const) : []
+          })
+        ) as Record<string, ProfileSummary>
+
+        if (!isMounted) return
+
+        setProfilesById(nextProfilesById)
         return
       }
 
@@ -330,12 +442,17 @@ export default function Dashboard() {
     return () => {
       isMounted = false
     }
-  }, [organizationMemberIds, pointsWithStats])
+  }, [organizationMemberIds, pointsWithStats, useMockMembers])
 
   const organizationOptions = organizations.map((organization) => ({
     id: organization.id,
-    label: organization.name?.trim() || `ארגון #${organization.id}`,
+    label: getOrganizationLabel(organization),
   }))
+
+  const displayedOrganizationMemberIds = organizationMemberIds.slice(
+    0,
+    ORGANIZATION_MEMBER_PREVIEW_LIMIT
+  )
 
   const handleOrganizationChange = (value: string) => {
     const nextOrganization = organizations.find(
@@ -345,11 +462,12 @@ export default function Dashboard() {
     if (!nextOrganization) return
 
     setSelectedOrganizationId(value)
-    navigate(`/${getOrganizationSegment(nextOrganization)}`)
+    navigate(`/${getOrganizationSegment(nextOrganization)}${location.search}`)
   }
 
   const handlePointOpen = (point: Point) => {
     if (!selectedOrganization) return
+    if (useMockMembers) return
     navigate(`/${getOrganizationSegment(selectedOrganization)}/${getPointSegment(point)}`)
   }
 
@@ -376,10 +494,7 @@ export default function Dashboard() {
             <div className="page-shell">
               <div className="page-stack" dir="rtl">
                 {loadingOrganizations ? (
-                  <div className="space-y-6">
-                    <Skeleton className="h-56 w-full rounded-3xl" />
-                    <Skeleton className="h-80 w-full rounded-3xl" />
-                  </div>
+                  <DashboardSkeleton />
                 ) : organizationsError ? (
                   <Alert variant="destructive">
                     <CircleAlert className="size-4" />
@@ -403,175 +518,198 @@ export default function Dashboard() {
                     </AlertDescription>
                   </Alert>
                 ) : loadingPoints ? (
-                  <div className="space-y-6">
-                    <Skeleton className="h-56 w-full rounded-3xl" />
-                    <Skeleton className="h-80 w-full rounded-3xl" />
-                  </div>
-                ) : pointsError ? (
-                  <Alert variant="destructive">
-                    <CircleAlert className="size-4" />
-                    <AlertTitle>הנקודות אינן זמינות</AlertTitle>
-                    <AlertDescription>{pointsError}</AlertDescription>
-                  </Alert>
-                ) : points.length === 0 ? (
-                  <Alert>
-                    <MapPinned className="size-4" />
-                    <AlertTitle>עדיין אין נקודות</AlertTitle>
-                    <AlertDescription>
-                      לארגון הזה אין כרגע נקודות שזמינות לחשבון שלך.
-                    </AlertDescription>
-                  </Alert>
+                  <DashboardSkeleton />
                 ) : (
-                  <>
-                    <Card className="border-border/70 shadow-none">
-                      <CardHeader className="gap-6 md:flex-row md:items-start md:justify-between">
-                        <div className="space-y-4">
+                  <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+                    <InfoPanel>
+                      <InfoPanelHeader
+                        icon={Building2}
+                        title={getOrganizationLabel(selectedOrganization)}
+                        description={getOrganizationDescription(selectedOrganization)}
+                        badge={
                           <Badge
                             variant={
                               selectedOrganization.status === "active" ? "default" : "outline"
                             }
                             className="rounded-full"
                           >
-                            <CheckCircle2 className="size-3.5" />
-                            {selectedOrganization.status === "active"
-                              ? "פעיל"
-                              : selectedOrganization.status || "לא פעיל"}
+                            {getStatusLabel(selectedOrganization.status)}
                           </Badge>
+                        }
+                      />
 
-                          <div className="flex items-start gap-3">
-                            <div className="flex size-12 items-center justify-center rounded-xl bg-primary/15">
-                              <Building2 className="size-5" />
-                            </div>
-                            <div className="space-y-2">
-                              <CardTitle className="text-3xl">
-                                {selectedOrganization.name?.trim() ||
-                                  `ארגון #${selectedOrganization.id}`}
-                              </CardTitle>
-                              <CardDescription className="max-w-3xl text-sm leading-7">
-                                {selectedOrganization.notes?.trim() ||
-                                  "עדיין לא נוסף תיאור לארגון הזה."}
-                              </CardDescription>
-                            </div>
-                          </div>
-                        </div>
+                      <InfoPanelBody>
+                        <InfoPanelStats>
+                          <InfoPanelStat
+                            icon={MapPinned}
+                            label="נקודות"
+                            value={points.length}
+                            description="נקודות פעילות ושיוך בתוך הארגון"
+                          />
+                          <InfoPanelStat
+                            icon={Users2}
+                            label="חברים"
+                            value={organizationMembersCount}
+                            description="חברי ארגון פעילים הזמינים עבורך"
+                          />
+                        </InfoPanelStats>
 
-                        <div className="grid gap-4 sm:grid-cols-2 md:w-[340px]">
-                          <div className="rounded-xl border border-border bg-muted/30 p-4">
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Users2 className="size-4" />
-                              חברי ארגון
-                            </div>
-                            <div className="mt-2 text-2xl font-semibold">
-                              {organizationMembersCount}
-                            </div>
-                            <div className="mt-3">
-                              <MemberAvatarStack
-                                memberIds={organizationMemberIds}
-                                profilesById={profilesById}
-                              />
-                            </div>
-                          </div>
+                        <InfoPanelSection
+                          icon={Users2}
+                          title="חברי ארגון"
+                          action={
+                            <Badge variant="secondary" className="rounded-full">
+                              עד {Math.min(organizationMembersCount, ORGANIZATION_MEMBER_PREVIEW_LIMIT)}
+                            </Badge>
+                          }
+                        >
+                          <OrganizationMembersList
+                            memberIds={displayedOrganizationMemberIds}
+                            profilesById={profilesById}
+                            totalCount={organizationMembersCount}
+                          />
+                        </InfoPanelSection>
 
-                          <div className="rounded-xl border border-border bg-muted/30 p-4">
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <MapPinned className="size-4" />
-                              נקודות פעילות
-                            </div>
-                            <div className="mt-2 text-2xl font-semibold">{points.length}</div>
-                            <p className="mt-3 text-xs leading-6 text-muted-foreground">
-                              כל נקודה מרכזת צוות, מסלולים ותיעוד שוטף.
-                            </p>
-                          </div>
-                        </div>
-                      </CardHeader>
-                    </Card>
+                        {canManageTrackTypes ? (
+                          <InfoPanelSection
+                            icon={GitBranchPlus}
+                            title="ניהול סוגי מסלולים"
+                            description="בעלי ארגון יכולים ליצור, לעדכן ולסקור תבניות מסלול בצורה ויזואלית."
+                            action={
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="rounded-xl"
+                                onClick={() =>
+                                  navigate(`/${getOrganizationSegment(selectedOrganization)}/track-types`)
+                                }
+                              >
+                                ניהול מסלולים
+                              </Button>
+                            }
+                          />
+                        ) : null}
+                      </InfoPanelBody>
+                    </InfoPanel>
 
                     <Card className="border-border/70 shadow-none">
-                      <CardHeader className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                        <div className="space-y-2">
-                          <CardTitle className="flex items-center gap-2 text-xl">
-                            <MapPinned className="size-5" />
-                            נקודות הארגון
-                          </CardTitle>
-                          <CardDescription className="max-w-2xl leading-7">
-                            בחרו נקודה כדי להמשיך לעמוד הייעודי שלה ולראות את המסלולים,
-                            החברים והפעילות השוטפת בה.
-                          </CardDescription>
-                        </div>
+                      <CardHeader className="gap-3">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                          <div className="space-y-2">
+                            <CardTitle className="flex items-center gap-2 text-xl">
+                              <MapPinned className="size-5" />
+                              נקודות הארגון
+                            </CardTitle>
+                            <CardDescription className="max-w-2xl leading-7">
+                              כל נקודה מציגה את המידע המרכזי שלה, את חברי הצוות הפעילים, ואת
+                              כמות המסלולים הקיימים בה.
+                            </CardDescription>
+                          </div>
 
-                        <Badge variant="outline" className="rounded-full">
-                          סה"כ {points.length} נקודות
-                        </Badge>
+                          <Badge variant="outline" className="rounded-full">
+                            סה"כ {points.length} נקודות
+                          </Badge>
+                        </div>
+                        {useMockMembers ? (
+                          <CardDescription>
+                            מצב הדמיה פעיל. הנתונים נטענים מקובץ דמה מקומי, והתמונות עצמן נטענות מ-`randomuser.me` כדי לתת תחושת עומס מציאותית יותר.
+                          </CardDescription>
+                        ) : null}
                       </CardHeader>
 
                       <CardContent>
-                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                          {pointsWithStats.map((point) => (
-                            <Card
-                              key={point.id}
-                              className="h-full border-border/70 shadow-none transition-colors hover:border-primary/35"
-                            >
-                              <CardHeader className="space-y-3">
-                                <div className="flex items-start justify-between gap-4">
-                                  <div className="space-y-1.5">
-                                    <CardTitle className="text-xl">
-                                      {point.name?.trim() || `נקודה #${point.id}`}
-                                    </CardTitle>
-                                    <CardDescription className="line-clamp-3 leading-6">
-                                      {point.notes?.trim() ||
-                                        "עדיין לא נוספו הערות לנקודה הזו."}
-                                    </CardDescription>
-                                  </div>
-                                  <Badge
-                                    variant={point.status === "active" ? "default" : "outline"}
-                                    className="rounded-full"
-                                  >
-                                    {point.status === "active"
-                                      ? "פעיל"
-                                      : point.status || "לא פעיל"}
-                                  </Badge>
-                                </div>
-                              </CardHeader>
-
-                              <CardContent className="space-y-4">
-                                <div className="flex items-center justify-between gap-3 border-b border-border/60 pb-4">
-                                  <div className="space-y-2">
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                      <Users2 className="size-4" />
-                                      חברים
+                        {pointsError ? (
+                          <Alert variant="destructive">
+                            <CircleAlert className="size-4" />
+                            <AlertTitle>הנקודות אינן זמינות</AlertTitle>
+                            <AlertDescription>{pointsError}</AlertDescription>
+                          </Alert>
+                        ) : pointsWithStats.length === 0 ? (
+                          <Alert>
+                            <MapPinned className="size-4" />
+                            <AlertTitle>עדיין אין נקודות</AlertTitle>
+                            <AlertDescription>
+                              לארגון הזה אין כרגע נקודות שזמינות לחשבון שלך.
+                            </AlertDescription>
+                          </Alert>
+                        ) : (
+                          <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                            {pointsWithStats.map((point) => (
+                              <Card
+                                key={point.id}
+                                size="sm"
+                                className="border-border/70 shadow-none transition-colors hover:border-primary/35"
+                              >
+                                <CardHeader className="gap-3">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="space-y-1.5">
+                                      <CardTitle className="text-lg">
+                                        {getPointLabel(point)}
+                                      </CardTitle>
+                                      <CardDescription className="line-clamp-2 leading-6">
+                                        {getPointDescription(point)}
+                                      </CardDescription>
                                     </div>
-                                    <MemberAvatarStack
-                                      memberIds={point.memberIds}
-                                      profilesById={profilesById}
-                                      size="sm"
-                                    />
+                                    <Badge
+                                      variant={point.status === "active" ? "default" : "outline"}
+                                      className="rounded-full"
+                                    >
+                                      {getStatusLabel(point.status)}
+                                    </Badge>
                                   </div>
-                                  <div className="text-2xl font-semibold">{point.membersCount}</div>
-                                </div>
+                                </CardHeader>
 
-                                <div className="flex items-center justify-between gap-3">
-                                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                    <Route className="size-4" />
-                                    מסלולים פעילים
+                                <CardContent className="space-y-4">
+                                  <div className="flex items-center justify-between gap-4">
+                                    <div className="space-y-2">
+                                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                        <Users2 className="size-4" />
+                                        חברים
+                                      </div>
+                                      <MemberAvatarStack
+                                        memberIds={point.memberIds}
+                                        profilesById={profilesById}
+                                        size="sm"
+                                      />
+                                    </div>
+
+                                    <div className="text-right">
+                                      <div className="text-2xl font-semibold">
+                                        {point.membersCount}
+                                      </div>
+                                      <div className="text-xs text-muted-foreground">חברים</div>
+                                    </div>
                                   </div>
-                                  <div className="text-xl font-semibold">{point.tracksCount}</div>
-                                </div>
 
-                                <Button
-                                  className="group h-11 w-full justify-between rounded-xl"
-                                  variant="outline"
-                                  onClick={() => handlePointOpen(point)}
-                                >
-                                  מעבר לעמוד הנקודה
-                                  <ArrowLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-1" />
-                                </Button>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
+                                  <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5">
+                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                      <Route className="size-4" />
+                                      מסלולים
+                                    </div>
+                                    <div className="text-base font-semibold">
+                                      {point.tracksCount}
+                                    </div>
+                                  </div>
+                                </CardContent>
+
+                                <CardFooter className="border-t border-border/60 pt-4">
+                                  <Button
+                                    className="group w-full justify-between rounded-xl"
+                                    variant="outline"
+                                    disabled={useMockMembers}
+                                    onClick={() => handlePointOpen(point)}
+                                  >
+                                    {useMockMembers ? "זמין בנתונים אמיתיים" : "מעבר לעמוד הנקודה"}
+                                    <ArrowLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-1" />
+                                  </Button>
+                                </CardFooter>
+                              </Card>
+                            ))}
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
-                  </>
+                  </div>
                 )}
               </div>
             </div>
@@ -579,6 +717,109 @@ export default function Dashboard() {
         </div>
       </SidebarInset>
     </SidebarProvider>
+  )
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+      <InfoPanel>
+        <CardHeader className="gap-3">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-8 w-40" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-5/6" />
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+            <Skeleton className="h-24 w-full rounded-xl" />
+            <Skeleton className="h-24 w-full rounded-xl" />
+          </div>
+          <div className="space-y-3">
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-14 w-full rounded-xl" />
+            <Skeleton className="h-14 w-full rounded-xl" />
+            <Skeleton className="h-14 w-full rounded-xl" />
+          </div>
+        </CardContent>
+      </InfoPanel>
+
+      <Card className="border-border/70 shadow-none">
+        <CardHeader className="gap-3">
+          <Skeleton className="h-6 w-36" />
+          <Skeleton className="h-4 w-full max-w-2xl" />
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+            <Skeleton className="h-72 w-full rounded-2xl" />
+            <Skeleton className="h-72 w-full rounded-2xl" />
+            <Skeleton className="h-72 w-full rounded-2xl" />
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function OrganizationMembersList({
+  memberIds,
+  profilesById,
+  totalCount,
+}: {
+  memberIds: string[]
+  profilesById: Record<string, ProfileSummary>
+  totalCount: number
+}) {
+  if (memberIds.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-border/70 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
+        עדיין אין חברים זמינים להצגה בארגון הזה.
+      </div>
+    )
+  }
+
+  const hiddenMembersCount = Math.max(totalCount - memberIds.length, 0)
+
+  return (
+    <div className="space-y-2">
+      <div className="max-h-[28rem] space-y-2 overflow-y-auto pe-1">
+        {memberIds.map((memberId) => {
+          const member = profilesById[memberId]
+
+          return (
+            <div
+              key={memberId}
+              className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/15 px-3 py-2.5"
+            >
+              <Avatar className="size-10 rounded-xl">
+                <AvatarImage
+                  className="rounded-xl"
+                  src={member?.avatar_url ?? undefined}
+                  alt={member?.display_name ?? "חבר ארגון"}
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                />
+                <AvatarFallback className="rounded-xl">
+                  {getAvatarInitials(member?.display_name)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-medium">
+                  {member?.display_name?.trim() || "חבר צוות"}
+                </div>
+                <div className="truncate text-xs text-muted-foreground">חבר בארגון</div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {hiddenMembersCount > 0 ? (
+        <div className="text-xs text-muted-foreground">
+          +{hiddenMembersCount} חברים נוספים לא הוצגו ברשימה הזו
+        </div>
+      ) : null}
+    </div>
   )
 }
 
@@ -591,11 +832,11 @@ function MemberAvatarStack({
   profilesById: Record<string, ProfileSummary>
   size?: "default" | "sm"
 }) {
-  const visibleMemberIds = memberIds.slice(0, 3)
+  const visibleMemberIds = memberIds.slice(0, POINT_MEMBER_AVATAR_LIMIT)
   const overflowCount = Math.max(memberIds.length - visibleMemberIds.length, 0)
 
   if (visibleMemberIds.length === 0) {
-    return <div className="text-xs text-muted-foreground">עדיין אין חברים זמינים להצגה</div>
+    return <div className="text-xs text-muted-foreground">עדיין אין חברים להצגה</div>
   }
 
   return (
@@ -608,6 +849,8 @@ function MemberAvatarStack({
             <AvatarImage
               src={member?.avatar_url ?? undefined}
               alt={member?.display_name ?? "חבר צוות"}
+              loading="lazy"
+              referrerPolicy="no-referrer"
             />
             <AvatarFallback>{getAvatarInitials(member?.display_name)}</AvatarFallback>
           </Avatar>

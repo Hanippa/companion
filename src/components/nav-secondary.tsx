@@ -6,7 +6,6 @@ import { Link, useLocation } from "react-router-dom"
 import {
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -26,9 +25,8 @@ export function NavSecondary({
 
   return (
     <SidebarGroup dir="rtl" {...props}>
-      <SidebarGroupLabel>כלים</SidebarGroupLabel>
       <SidebarGroupContent>
-        <SidebarMenu className="space-y-1">
+        <SidebarMenu>
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton
@@ -36,7 +34,7 @@ export function NavSecondary({
                 isActive={
                   location.pathname === item.url || location.pathname.startsWith(`${item.url}/`)
                 }
-                className="h-10 rounded-xl text-sm hover:bg-sidebar-accent/80 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium"
+                className="text-sm data-[active=true]:font-medium"
               >
                 <Link to={item.url}>
                   {item.icon}

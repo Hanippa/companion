@@ -1,23 +1,12 @@
-import { Check, CircleDot, GitBranch, LoaderCircle } from "lucide-react"
+import { Check, CircleDot, LoaderCircle, Route } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { getAvatarInitials } from "@/lib/avatar"
+import type { TrackNode, TrackNodeConnection } from "@/lib/track-schema"
 import { cn } from "@/lib/utils"
 
-export type TrackTransition = {
-  id: string
-  label: string
-  to_step: string
-}
-
-export type TrackStep = {
-  id: string
-  title: string
-  description?: string | null
-  transitions?: TrackTransition[]
-}
+export type TrackNodeAction = TrackNodeConnection
 
 export type TrackStepperEvent = {
   id: number
@@ -31,215 +20,302 @@ export type TrackStepperEvent = {
 }
 
 type TrackStepperProps = {
-  steps: TrackStep[]
-  currentStepKey: string | null
+  nodes: TrackNode[]
+  startNodeId: string | null
+  currentNodeId: string | null
   events?: TrackStepperEvent[]
   pendingTransitionId?: string | null
-  onTransitionSelect?: (transition: TrackTransition, sourceStep: TrackStep) => void
+  onTransitionSelect?: (action: TrackNodeAction, sourceNode: TrackNode) => void
   className?: string
 }
 
-type BranchGroup = {
-  sourceStepId: string
-  optionIds: string[]
-}
-
-type StepItem = {
-  type: "step"
-  id: string
-  step: TrackStep
-  orderIndex: number
-}
-
-type BranchItem = {
-  type: "branch"
-  id: string
-  sourceStep: TrackStep
-  options: TrackStep[]
-  orderIndex: number
-}
-
-type DisplayItem = StepItem | BranchItem
-
-const getPayloadStepValue = (
+const getPayloadString = (
   payload: Record<string, unknown> | null | undefined,
-  key: "to_step" | "from_step" | "transition_id"
+  key: string
 ) => {
   const value = payload?.[key]
-  return typeof value === "string" && value.trim() ? value : null
+  return typeof value === "string" && value.trim() ? value.trim() : null
 }
 
-const formatEventTitle = (event: TrackStepperEvent) => {
-  if (event.event_type === "created") return "הרשומה נוצרה"
-  if (event.event_type === "step_changed") return "המסלול קודם"
-  return event.event_type
+const getEventTitle = (event: TrackStepperEvent) => {
+  if (event.event_type === "step_advance") return "המסלול קודם"
+  if (event.event_type === "general" && getPayloadString(event.payload, "kind") === "created") {
+    return "הרשומה נוצרה"
+  }
+  return "עדכון כללי"
 }
 
-const formatEventSubtitle = (event: TrackStepperEvent) => {
-  const fromStep = getPayloadStepValue(event.payload, "from_step")
-  const toStep = getPayloadStepValue(event.payload, "to_step")
+const getEventSubtitle = (event: TrackStepperEvent) => {
+  if (event.event_type === "step_advance") {
+    const transitionLabel = getPayloadString(event.payload, "transition_label")
+    const toNodeId = getPayloadString(event.payload, "to_node_id")
 
-  if (fromStep && toStep) {
-    return `מעבר מ-${fromStep} אל ${toStep}`
+    if (transitionLabel && toNodeId) {
+      return `${transitionLabel} · אל ${toNodeId}`
+    }
+
+    if (transitionLabel) {
+      return transitionLabel
+    }
+
+    if (toNodeId) {
+      return `מעבר אל ${toNodeId}`
+    }
   }
 
-  if (toStep) {
-    return `מעבר אל ${toStep}`
-  }
+  const note = getPayloadString(event.payload, "note")
+  if (note) return note
 
   return new Date(event.created_at).toLocaleString("he-IL")
 }
 
-const buildBranchGroups = (steps: TrackStep[]) => {
-  const stepIds = new Set(steps.map((step) => step.id))
-  const groups: BranchGroup[] = []
+const buildTraversedNodeIds = ({
+  nodes,
+  startNodeId,
+  currentNodeId,
+  events,
+}: {
+  nodes: TrackNode[]
+  startNodeId: string | null
+  currentNodeId: string | null
+  events: TrackStepperEvent[]
+}) => {
+  const nodeIds = new Set(nodes.map((node) => node.id))
+  const orderedPath: string[] = []
 
-  for (const step of steps) {
-    const optionIds = (step.transitions ?? [])
-      .map((transition) => transition.to_step)
-      .filter((stepId, index, array) => stepIds.has(stepId) && array.indexOf(stepId) === index)
+  const pushNode = (nodeId: string | null) => {
+    if (!nodeId || !nodeIds.has(nodeId)) return
+    if (orderedPath[orderedPath.length - 1] === nodeId) return
+    orderedPath.push(nodeId)
+  }
 
-    if (optionIds.length > 1) {
-      groups.push({
-        sourceStepId: step.id,
-        optionIds,
-      })
+  pushNode(startNodeId)
+
+  for (const event of events) {
+    if (event.event_type === "step_advance") {
+      pushNode(getPayloadString(event.payload, "from_node_id") ?? event.step_key)
+      pushNode(getPayloadString(event.payload, "to_node_id"))
+      continue
+    }
+
+    if (orderedPath.length === 0) {
+      pushNode(event.step_key)
     }
   }
 
-  return groups
-}
+  pushNode(currentNodeId)
 
-const buildDisplayItems = (steps: TrackStep[]) => {
-  const groups = buildBranchGroups(steps)
-  const groupBySource = new Map(groups.map((group) => [group.sourceStepId, group]))
-  const collapsedStepIds = new Set(groups.flatMap((group) => group.optionIds))
-  const stepMap = new Map(steps.map((step) => [step.id, step]))
-  const items: DisplayItem[] = []
-
-  steps.forEach((step, index) => {
-    if (collapsedStepIds.has(step.id)) return
-
-    items.push({
-      type: "step",
-      id: step.id,
-      step,
-      orderIndex: index,
-    })
-
-    const group = groupBySource.get(step.id)
-    if (!group) return
-
-    const options = group.optionIds
-      .map((optionId) => stepMap.get(optionId))
-      .filter((option): option is TrackStep => Boolean(option))
-
-    if (options.length < 2) return
-
-    items.push({
-      type: "branch",
-      id: `${step.id}-branch`,
-      sourceStep: step,
-      options,
-      orderIndex: index + 0.5,
-    })
-  })
-
-  return { items }
-}
-
-const resolveVisitedStepIds = (events: TrackStepperEvent[], currentStepKey: string | null) => {
-  const visited = new Set<string>()
-
-  if (currentStepKey) visited.add(currentStepKey)
-
-  for (const event of events) {
-    if (event.step_key) visited.add(event.step_key)
-
-    const toStep = getPayloadStepValue(event.payload, "to_step")
-    if (toStep) visited.add(toStep)
-
-    const fromStep = getPayloadStepValue(event.payload, "from_step")
-    if (fromStep) visited.add(fromStep)
+  if (orderedPath.length === 0 && nodes[0]) {
+    orderedPath.push(nodes[0].id)
   }
 
-  return visited
+  return orderedPath
 }
 
-const getLatestVisitedOptionId = (events: TrackStepperEvent[], optionIds: Set<string>) => {
-  for (const event of events) {
-    const toStep = getPayloadStepValue(event.payload, "to_step")
-    if (toStep && optionIds.has(toStep)) return toStep
+const groupEventsByNode = (events: TrackStepperEvent[]) => {
+  const grouped = new Map<string, TrackStepperEvent[]>()
 
-    if (event.step_key && optionIds.has(event.step_key)) return event.step_key
+  for (const event of events) {
+    if (!event.step_key) continue
+
+    const current = grouped.get(event.step_key) ?? []
+    current.push(event)
+    grouped.set(event.step_key, current)
   }
 
-  return null
+  return grouped
 }
 
-const getStepEvents = (events: TrackStepperEvent[], stepId: string) =>
-  events.filter((event) => {
-    if (event.step_key === stepId) return true
-    return getPayloadStepValue(event.payload, "to_step") === stepId
-  })
+function StepEventCard({ event }: { event: TrackStepperEvent }) {
+  const actorLabel = event.actor_name?.trim() || "חבר צוות"
+  const eventSubtitle = getEventSubtitle(event)
 
-const getBranchEvents = (events: TrackStepperEvent[], optionIds: Set<string>) =>
-  events.filter((event) => {
-    if (event.step_key && optionIds.has(event.step_key)) return true
-    const toStep = getPayloadStepValue(event.payload, "to_step")
-    return Boolean(toStep && optionIds.has(toStep))
-  })
+  return (
+    <div className="rounded-xl border border-border/60 bg-background/70 px-4 py-3">
+      <div className="flex items-start gap-3">
+        <Avatar className="size-9 border border-border/60">
+          <AvatarImage src={event.actor_avatar_url ?? undefined} alt={actorLabel} />
+          <AvatarFallback className="text-xs">
+            {getAvatarInitials(actorLabel)}
+          </AvatarFallback>
+        </Avatar>
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium">{actorLabel}</div>
+              <div className="text-xs text-muted-foreground">{getEventTitle(event)}</div>
+            </div>
+            <div className="shrink-0 text-[11px] text-muted-foreground">
+              {new Date(event.created_at).toLocaleString("he-IL")}
+            </div>
+          </div>
+          <div className="text-sm leading-6 text-muted-foreground">{eventSubtitle}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function NodeCard({
+  node,
+  events,
+  isCurrent,
+  isCompleted,
+  pendingTransitionId,
+  onTransitionSelect,
+}: {
+  node: TrackNode
+  events: TrackStepperEvent[]
+  isCurrent: boolean
+  isCompleted: boolean
+  pendingTransitionId: string | null
+  onTransitionSelect?: (action: TrackNodeAction, sourceNode: TrackNode) => void
+}) {
+  const canAdvance = isCurrent && node.next_nodes.length > 0 && onTransitionSelect
+
+  return (
+    <div
+      className={cn(
+        "w-full rounded-2xl border p-5 transition-colors",
+        isCurrent && "border-primary/40 bg-primary/5",
+        isCompleted && "border-primary/20 bg-primary/5",
+        !isCurrent && !isCompleted && "border-border/70 bg-card"
+      )}
+    >
+      <div className="space-y-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <div className="text-lg font-semibold">{node.title}</div>
+            {node.description ? (
+              <div className="text-sm leading-6 text-muted-foreground">
+                {node.description}
+              </div>
+            ) : null}
+          </div>
+          <div
+            className={cn(
+              "rounded-full px-2.5 py-1 text-xs font-medium",
+              isCurrent && "bg-primary text-primary-foreground",
+              isCompleted && "bg-primary/10 text-primary",
+              !isCurrent && !isCompleted && "bg-muted text-muted-foreground"
+            )}
+          >
+            {isCurrent ? "נוכחי" : isCompleted ? "הושלם" : "ממתין"}
+          </div>
+        </div>
+
+        {canAdvance ? (
+          <div className="space-y-2 pt-2">
+            <div className="text-xs font-medium tracking-wide text-muted-foreground">
+              אפשרויות המשך
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {node.next_nodes.map((action) => {
+                const isPending = pendingTransitionId === action.id
+                return (
+                  <Button
+                    key={action.id}
+                    variant={isPending ? "default" : "outline"}
+                    size="sm"
+                    disabled={Boolean(pendingTransitionId)}
+                    onClick={() => onTransitionSelect?.(action, node)}
+                    className="rounded-full"
+                  >
+                    {isPending ? <LoaderCircle className="size-4 animate-spin" /> : <Route className="size-4" />}
+                    {action.label}
+                  </Button>
+                )
+              })}
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      {events.length > 0 ? (
+        <div className="mt-4 space-y-3 border-t border-border/60 pt-4">
+          <div className="text-xs font-medium tracking-wide text-muted-foreground">
+            אירועים בצומת זה
+          </div>
+          <div className="space-y-3">
+            {events.map((event) => (
+              <StepEventCard key={event.id} event={event} />
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
 
 export function TrackStepper({
-  steps,
-  currentStepKey,
+  nodes,
+  startNodeId,
+  currentNodeId,
   events = [],
   pendingTransitionId = null,
   onTransitionSelect,
   className,
 }: TrackStepperProps) {
-  const { items } = buildDisplayItems(steps)
-  const stepIndexMap = new Map(steps.map((step, index) => [step.id, index]))
-  const currentIndex = currentStepKey ? (stepIndexMap.get(currentStepKey) ?? -1) : -1
-  const visitedStepIds = resolveVisitedStepIds(events, currentStepKey)
+  const orderedEvents = [...events].sort(
+    (left, right) =>
+      new Date(left.created_at).getTime() - new Date(right.created_at).getTime()
+  )
+  const nodeMap = new Map(nodes.map((node) => [node.id, node] as const))
+  const traversedNodeIds = buildTraversedNodeIds({
+    nodes,
+    startNodeId,
+    currentNodeId,
+    events: orderedEvents,
+  })
+  const visibleNodes = traversedNodeIds
+    .map((nodeId) => nodeMap.get(nodeId))
+    .filter((node): node is TrackNode => Boolean(node))
+  const eventsByNode = groupEventsByNode(orderedEvents)
+  const resolvedCurrentNodeId =
+    currentNodeId && nodeMap.has(currentNodeId)
+      ? currentNodeId
+      : visibleNodes[visibleNodes.length - 1]?.id ?? startNodeId
+
+  if (nodes.length === 0) {
+    return (
+      <div
+        className={cn(
+          "rounded-2xl border border-dashed border-border/70 bg-muted/20 p-6 text-sm text-muted-foreground",
+          className
+        )}
+      >
+        לסוג המסלול הזה עדיין אין צמתים מוגדרים.
+      </div>
+    )
+  }
 
   return (
     <div className={cn("space-y-0", className)}>
-      {items.map((item, index) => {
-        const isLast = index === items.length - 1
-        const isCurrent =
-          item.type === "step"
-            ? item.step.id === currentStepKey
-            : item.options.some((option) => option.id === currentStepKey)
-        const isCompleted =
-          !isCurrent &&
-          (item.type === "step"
-            ? currentIndex > item.orderIndex
-            : item.options.some((option) => visitedStepIds.has(option.id)))
-        const isUpcoming = !isCurrent && !isCompleted
+      {visibleNodes.map((node, index) => {
+        const isLast = index === visibleNodes.length - 1
+        const isCurrent = node.id === resolvedCurrentNodeId
+        const isCompleted = !isCurrent && traversedNodeIds.indexOf(node.id) < traversedNodeIds.indexOf(resolvedCurrentNodeId ?? "")
 
         return (
-          <div key={item.id} className="relative flex gap-4 pb-5 last:pb-0">
+          <div key={node.id} className="relative flex gap-4 pb-5 last:pb-0">
             <div className="relative flex w-10 shrink-0 justify-center">
               {!isLast ? (
                 <div
                   className={cn(
                     "absolute left-1/2 top-9 h-[calc(100%-1.25rem)] -translate-x-1/2 border-l",
-                    isCompleted ? "border-primary/50" : "border-border"
+                    isCompleted ? "border-primary/40" : "border-border"
                   )}
                 />
               ) : null}
               <div
                 className={cn(
                   "relative z-10 mt-1 flex size-8 items-center justify-center rounded-full border transition-colors",
-                  isCurrent && "border-primary bg-primary text-primary-foreground shadow-sm",
+                  isCurrent && "border-primary bg-primary text-primary-foreground",
                   isCompleted && "border-primary/30 bg-primary/10 text-primary",
-                  isUpcoming && "border-border bg-white text-muted-foreground"
+                  !isCurrent && !isCompleted && "border-border bg-background text-muted-foreground"
                 )}
               >
-                {item.type === "branch" ? (
-                  <GitBranch className="size-4" />
-                ) : isCurrent ? (
+                {isCurrent ? (
                   <CircleDot className="size-4" />
                 ) : isCompleted ? (
                   <Check className="size-4" />
@@ -247,231 +323,17 @@ export function TrackStepper({
               </div>
             </div>
 
-            {item.type === "step" ? (
-              <StepCard
-                step={item.step}
-                events={getStepEvents(events, item.step.id)}
-                isCurrent={isCurrent}
-                isCompleted={isCompleted}
-                isUpcoming={isUpcoming}
-                pendingTransitionId={pendingTransitionId}
-                onTransitionSelect={onTransitionSelect}
-              />
-            ) : (
-              <BranchStepCard
-                sourceStep={item.sourceStep}
-                options={item.options}
-                currentStepKey={currentStepKey}
-                events={getBranchEvents(events, new Set(item.options.map((option) => option.id)))}
-                visitedStepIds={visitedStepIds}
-                isCurrent={isCurrent}
-                isCompleted={isCompleted}
-                isUpcoming={isUpcoming}
-              />
-            )}
+            <NodeCard
+              node={node}
+              events={eventsByNode.get(node.id) ?? []}
+              isCurrent={isCurrent}
+              isCompleted={isCompleted}
+              pendingTransitionId={pendingTransitionId}
+              onTransitionSelect={onTransitionSelect}
+            />
           </div>
         )
       })}
-    </div>
-  )
-}
-
-type StepCardProps = {
-  step: TrackStep
-  events: TrackStepperEvent[]
-  isCurrent: boolean
-  isCompleted: boolean
-  isUpcoming: boolean
-  pendingTransitionId: string | null
-  onTransitionSelect?: (transition: TrackTransition, sourceStep: TrackStep) => void
-}
-
-function StepCard({
-  step,
-  events,
-  isCurrent,
-  isCompleted,
-  isUpcoming,
-  pendingTransitionId,
-  onTransitionSelect,
-}: StepCardProps) {
-  return (
-    <div
-      className={cn(
-        "min-w-0 flex-1 rounded-[1.4rem] border p-4 transition-colors",
-        isCurrent && "border-primary/35 bg-primary/[0.055]",
-        isCompleted && "border-primary/20 bg-primary/[0.035]",
-        isUpcoming && "border-border/70 bg-white/94"
-      )}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="font-medium">{step.title}</div>
-          {step.description ? (
-            <div className="mt-1 text-sm leading-6 text-muted-foreground">{step.description}</div>
-          ) : null}
-        </div>
-        {isCurrent ? <Badge>נוכחי</Badge> : null}
-        {isCompleted ? <Badge variant="secondary">הושלם</Badge> : null}
-      </div>
-
-      {events.length > 0 ? (
-        <div className="mt-4 space-y-2">
-          {events.map((event) => (
-            <div key={event.id} className="rounded-xl border border-border bg-muted/30 p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <Avatar size="sm">
-                    <AvatarImage src={event.actor_avatar_url ?? undefined} alt={event.actor_name ?? "משתמש"} />
-                    <AvatarFallback>{getAvatarInitials(event.actor_name ?? undefined)}</AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0">
-                  <div className="text-sm font-medium">{formatEventTitle(event)}</div>
-                    <div className="mt-0.5 text-xs text-muted-foreground">
-                      {event.actor_name?.trim() || "משתמש לא מזוהה"}
-                    </div>
-                  </div>
-                </div>
-                <Badge variant="outline" className="rounded-full border-border/70 bg-white/90">
-                  {new Date(event.created_at).toLocaleString("he-IL")}
-                </Badge>
-              </div>
-              <div className="mt-1 text-sm text-muted-foreground">{formatEventSubtitle(event)}</div>
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {isCurrent && step.transitions && step.transitions.length > 0 && onTransitionSelect ? (
-        <div className="mt-4 space-y-3">
-          <div className="text-sm font-medium">המשך המסלול</div>
-          <div className="flex flex-wrap gap-2">
-            {step.transitions.map((transition) => {
-              const isPending = pendingTransitionId === transition.id
-
-              return (
-                <Button
-                  key={transition.id}
-                  size="sm"
-                  variant="secondary"
-                  disabled={Boolean(pendingTransitionId)}
-                  onClick={() => onTransitionSelect(transition, step)}
-                  className="rounded-full"
-                >
-                  {isPending ? <LoaderCircle className="size-4 animate-spin" /> : null}
-                  {transition.label}
-                </Button>
-              )
-            })}
-          </div>
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
-type BranchStepCardProps = {
-  sourceStep: TrackStep
-  options: TrackStep[]
-  currentStepKey: string | null
-  events: TrackStepperEvent[]
-  visitedStepIds: Set<string>
-  isCurrent: boolean
-  isCompleted: boolean
-  isUpcoming: boolean
-}
-
-function BranchStepCard({
-  sourceStep,
-  options,
-  currentStepKey,
-  events,
-  visitedStepIds,
-  isCurrent,
-  isCompleted,
-  isUpcoming,
-}: BranchStepCardProps) {
-  const optionIds = new Set(options.map((option) => option.id))
-  const activeOptionId =
-    (currentStepKey && optionIds.has(currentStepKey) ? currentStepKey : null) ??
-    getLatestVisitedOptionId(events, optionIds)
-
-  return (
-    <div
-      className={cn(
-        "min-w-0 flex-1 rounded-[1.4rem] border p-4 transition-colors",
-        isCurrent && "border-primary/35 bg-primary/[0.055]",
-        isCompleted && "border-primary/20 bg-primary/[0.035]",
-        isUpcoming && "border-border/70 bg-white/94"
-      )}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="font-medium">נתיב המשך</div>
-          <div className="mt-1 text-sm leading-6 text-muted-foreground">
-            אחרי {sourceStep.title} המסלול יכול להמשיך באחד מהנתיבים הבאים.
-          </div>
-        </div>
-        {isCurrent ? <Badge>בבחירה פעילה</Badge> : null}
-        {isCompleted ? <Badge variant="secondary">נתיב נבחר</Badge> : null}
-      </div>
-
-      {events.length > 0 ? (
-        <div className="mt-4 space-y-2">
-          {events.map((event) => (
-            <div key={event.id} className="rounded-xl border border-border bg-muted/30 p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <Avatar size="sm">
-                    <AvatarImage src={event.actor_avatar_url ?? undefined} alt={event.actor_name ?? "משתמש"} />
-                    <AvatarFallback>{getAvatarInitials(event.actor_name ?? undefined)}</AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium">{formatEventTitle(event)}</div>
-                    <div className="mt-0.5 text-xs text-muted-foreground">
-                      {event.actor_name?.trim() || "משתמש לא מזוהה"}
-                    </div>
-                  </div>
-                </div>
-                <Badge variant="outline" className="rounded-full border-border/70 bg-white/90">
-                  {new Date(event.created_at).toLocaleString("he-IL")}
-                </Badge>
-              </div>
-              <div className="mt-1 text-sm text-muted-foreground">{formatEventSubtitle(event)}</div>
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      <div className="mt-4 grid gap-3">
-        {options.map((option) => {
-          const isActive = option.id === activeOptionId
-          const wasVisited = visitedStepIds.has(option.id)
-
-          return (
-            <div
-              key={option.id}
-              className={cn(
-                "rounded-[1.1rem] border p-3 transition-colors",
-                isActive && "border-primary/35 bg-primary/10",
-                !isActive && wasVisited && "border-primary/20 bg-primary/[0.05]",
-                !isActive && !wasVisited && "border-border/70 bg-[rgba(248,249,244,0.9)]"
-              )}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-medium">{option.title}</div>
-                  {option.description ? (
-                    <div className="mt-1 text-sm text-muted-foreground">{option.description}</div>
-                  ) : null}
-                </div>
-                {isActive ? <Badge>נבחר</Badge> : null}
-                {!isActive && wasVisited ? <Badge variant="secondary">בוצע</Badge> : null}
-              </div>
-            </div>
-          )
-        })}
-      </div>
     </div>
   )
 }

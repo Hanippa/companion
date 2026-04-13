@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import {
   Select,
@@ -35,11 +36,14 @@ export function SiteHeader({
   return (
     <header className="sticky top-0 z-20 flex h-(--header-height) shrink-0 items-center border-b border-border/60 bg-background/90 backdrop-blur-md">
       <div className="flex h-full w-full items-center gap-3 px-4 lg:px-6" dir="rtl">
-        <SidebarTrigger className="flex size-10 items-center justify-center rounded-xl border border-border bg-card p-0 text-foreground hover:bg-accent" />
+        <SidebarTrigger className="flex size-9 items-center justify-center rounded-lg bg-card p-0 text-foreground hover:bg-accent" />
+        <Separator
+          orientation="vertical"
+          className="data-[orientation=vertical]:h-4 data-[orientation=vertical]:self-center"
+        />
 
         <div className="min-w-0 flex-1">
-          <p className="text-xs text-muted-foreground">companion</p>
-          <h1 className="truncate text-base font-semibold tracking-tight md:text-lg">
+          <h1 className="truncate text-base tracking-tight md:text-lg">
             {title}
           </h1>
         </div>

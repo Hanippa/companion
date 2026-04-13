@@ -7,6 +7,7 @@ import PointPage from "./pages/PointPage";
 import PointEditPage from "./pages/PointEditPage";
 import TrackCreatePage from "./pages/TrackCreatePage";
 import TrackPage from "./pages/TrackPage";
+import TrackTypesPage from "./pages/TrackTypesPage";
 import ProfilePage from "./pages/ProfilePage";
 import HelpPage from "./pages/HelpPage";
 import SearchPage from "./pages/SearchPage";
@@ -44,6 +45,7 @@ function App() {
         <Route path="/search" element={<SearchPage />} />
         <Route path="/help" element={<HelpPage />} />
         <Route path="/:organizationSlug" element={<Dashboard />} />
+        <Route path="/:organizationSlug/track-types" element={<TrackTypesPage />} />
         <Route path="/:organizationSlug/:pointSlug/edit" element={<PointEditPage />} />
         <Route path="/:organizationSlug/:pointSlug/track/new" element={<TrackCreatePage />} />
         <Route path="/:organizationSlug/:pointSlug/track/:trackSlug" element={<TrackPage />} />

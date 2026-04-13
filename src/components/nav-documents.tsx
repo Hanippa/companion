@@ -16,7 +16,7 @@ import {
 export function NavDocuments({
   label = "מסלולים",
   items,
-  emptyMessage = "בחרו נקודה כדי לטעון מסלולים",
+  emptyMessage = "בחרו נקודה כדי לראות מסלולים",
   loading = false,
 }: {
   label?: string
@@ -33,7 +33,7 @@ export function NavDocuments({
     <SidebarGroup className="group-data-[collapsible=icon]:hidden" dir="rtl">
       <SidebarGroupLabel>{label}</SidebarGroupLabel>
       <SidebarGroupContent>
-        <SidebarMenu className="space-y-1">
+        <SidebarMenu>
           {loading ? (
             <>
               <SidebarMenuSkeleton showIcon />
@@ -42,7 +42,7 @@ export function NavDocuments({
             </>
           ) : items.length === 0 ? (
             <SidebarMenuItem>
-              <SidebarMenuButton disabled className="h-10 rounded-xl text-sm">
+              <SidebarMenuButton disabled className="text-sidebar-foreground/70">
                 <FolderIcon />
                 <span>{emptyMessage}</span>
               </SidebarMenuButton>
@@ -53,7 +53,7 @@ export function NavDocuments({
                 <SidebarMenuButton
                   asChild
                   isActive={item.isActive}
-                  className="h-10 rounded-xl text-sm hover:bg-sidebar-accent/80 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium"
+                  className="text-sm data-[active=true]:font-medium"
                 >
                   <Link to={item.url}>
                     {item.icon}

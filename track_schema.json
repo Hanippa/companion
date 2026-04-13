@@ -1,0 +1,186 @@
+{
+  "version": 1,
+  "title": "טיפול במכשיר",
+  "description": "מסלול מעקב אחרי תיקון מכשיר, כולל מסירות ואישורי קבלה בין גורמים שונים",
+  "start_node_id": "intake",
+  "end_node_id": "final",
+  "nodes": [
+    {
+      "id": "intake",
+      "title": "יצירת תעודה וקליטת המכשיר",
+      "description": "פתיחת המעקב ואיסוף פרטי המכשיר, הלקוח והתקלה הראשונית",
+      "next_nodes": [
+        { "node_id": "technician_receival", "label": "העברה לטכנאי" },
+        { "node_id": "cancelled_by_customer", "label": "ביטול על ידי לקוח" }
+      ]
+    },
+    {
+      "id": "technician_receival",
+      "title": "אישור קבלת המכשיר על ידי טכנאי",
+      "description": "הטכנאי מאשר שהמכשיר התקבל לטיפול",
+      "next_nodes": [
+        { "node_id": "diagnostics", "label": "המשך לאבחון" },
+        { "node_id": "cancelled_by_customer", "label": "ביטול על ידי לקוח" }
+      ]
+    },
+    {
+      "id": "diagnostics",
+      "title": "אבחון",
+      "description": "בדיקה מקצועית של המכשיר, אימות התקלה והחלטה על מסלול הטיפול",
+      "next_nodes": [
+        { "node_id": "local_repair", "label": "תיקון מקומי" },
+        { "node_id": "sent_to_external_lab", "label": "שליחה למעבדה חיצונית" },
+        { "node_id": "parts_order", "label": "הזמנת חלקים" },
+        { "node_id": "closed_without_repair", "label": "סגירה ללא תיקון" },
+        { "node_id": "unrepairable", "label": "לא ניתן לתיקון" },
+        { "node_id": "cancelled_by_customer", "label": "ביטול על ידי לקוח" }
+      ]
+    },
+    {
+      "id": "sent_to_external_lab",
+      "title": "נשלח למעבדה חיצונית",
+      "description": "המכשיר יצא מהסניף / מהגורם המקומי בדרכו למעבדה חיצונית",
+      "next_nodes": [
+        { "node_id": "external_lab_receival", "label": "המעבדה אישרה קבלה" },
+        { "node_id": "cancelled_by_customer", "label": "ביטול על ידי לקוח" }
+      ]
+    },
+    {
+      "id": "external_lab_receival",
+      "title": "אישור קבלת המכשיר במעבדה חיצונית",
+      "description": "המעבדה החיצונית אישרה שהמכשיר התקבל בפועל",
+      "next_nodes": [
+        { "node_id": "external_lab_work", "label": "התחלת טיפול במעבדה" },
+        { "node_id": "closed_without_repair", "label": "סגירה ללא תיקון" }
+      ]
+    },
+    {
+      "id": "external_lab_work",
+      "title": "טיפול במעבדה חיצונית",
+      "description": "המכשיר נמצא בבדיקה או תיקון אצל ספק חיצוני",
+      "next_nodes": [
+        { "node_id": "returned_from_external_lab", "label": "המכשיר חזר מהמעבדה" },
+        { "node_id": "unrepairable", "label": "לא ניתן לתיקון" },
+        { "node_id": "closed_without_repair", "label": "סיום ללא תיקון" }
+      ]
+    },
+    {
+      "id": "returned_from_external_lab",
+      "title": "חזר ממעבדה חיצונית",
+      "description": "המכשיר חזר מהמעבדה החיצונית וממתין לאישור קבלה מקומי",
+      "next_nodes": [
+        { "node_id": "returned_lab_receival", "label": "אישור קבלה בחזרה" }
+      ]
+    },
+    {
+      "id": "returned_lab_receival",
+      "title": "אישור קבלת המכשיר בחזרה",
+      "description": "הגורם המקומי אישר שהמכשיר התקבל בחזרה מהמעבדה",
+      "next_nodes": [
+        { "node_id": "final_qa", "label": "מעבר לבדיקה סופית" },
+        { "node_id": "local_repair", "label": "נדרש המשך טיפול מקומי" },
+        { "node_id": "closed_without_repair", "label": "סיום ללא תיקון" }
+      ]
+    },
+    {
+      "id": "parts_order",
+      "title": "הזמנת חלקים",
+      "description": "הוזמנו החלקים הדרושים לצורך המשך טיפול",
+      "next_nodes": [
+        { "node_id": "waiting_for_parts", "label": "מעבר להמתנה לחלקים" },
+        { "node_id": "closed_without_repair", "label": "סיום ללא המשך טיפול" },
+        { "node_id": "cancelled_by_customer", "label": "ביטול על ידי לקוח" }
+      ]
+    },
+    {
+      "id": "waiting_for_parts",
+      "title": "המתנה לחלקים",
+      "description": "ממתינים להגעת החלקים הנדרשים לתיקון",
+      "next_nodes": [
+        { "node_id": "parts_receival", "label": "החלקים הגיעו" },
+        { "node_id": "closed_without_repair", "label": "סגירה ללא תיקון" },
+        { "node_id": "cancelled_by_customer", "label": "ביטול על ידי לקוח" }
+      ]
+    },
+    {
+      "id": "parts_receival",
+      "title": "אישור קבלת חלקים",
+      "description": "אישור שהחלקים התקבלו בפועל וזמינים להמשך טיפול",
+      "next_nodes": [
+        { "node_id": "local_repair", "label": "מעבר לתיקון מקומי" },
+        { "node_id": "closed_without_repair", "label": "סיום ללא תיקון" }
+      ]
+    },
+    {
+      "id": "local_repair",
+      "title": "תיקון מקומי",
+      "description": "ביצוע התיקון בתוך הארגון על ידי טכנאי מקומי",
+      "next_nodes": [
+        { "node_id": "final_qa", "label": "התיקון הושלם" },
+        { "node_id": "parts_order", "label": "נדרשים חלקים נוספים" },
+        { "node_id": "sent_to_external_lab", "label": "נדרשת מעבדה חיצונית" },
+        { "node_id": "unrepairable", "label": "לא ניתן לתיקון" },
+        { "node_id": "closed_without_repair", "label": "סיום ללא תיקון" },
+        { "node_id": "cancelled_by_customer", "label": "ביטול על ידי לקוח" }
+      ]
+    },
+    {
+      "id": "final_qa",
+      "title": "בדיקות סופיות",
+      "description": "וידוא שהמכשיר תקין, שהתקלה נפתרה ושהוא מוכן למסירה",
+      "next_nodes": [
+        { "node_id": "ready_for_pickup", "label": "עבר בדיקות - מוכן למסירה" },
+        { "node_id": "local_repair", "label": "נכשל - חזרה לתיקון" },
+        { "node_id": "sent_to_external_lab", "label": "נדרש טיפול חיצוני נוסף" },
+        { "node_id": "closed_without_repair", "label": "סגירה ללא תיקון" }
+      ]
+    },
+    {
+      "id": "ready_for_pickup",
+      "title": "מוכן למסירה",
+      "description": "המכשיר מוכן למסירה ללקוח",
+      "next_nodes": [
+        { "node_id": "delivered", "label": "נמסר ללקוח" },
+        { "node_id": "cancelled_by_customer", "label": "הלקוח ויתר על האיסוף" }
+      ]
+    },
+    {
+      "id": "delivered",
+      "title": "נמסר ללקוח",
+      "description": "המכשיר נמסר ללקוח והטיפול הסתיים בפועל",
+      "next_nodes": [
+        { "node_id": "final", "label": "סיום הטיפול" }
+      ]
+    },
+    {
+      "id": "cancelled_by_customer",
+      "title": "בוטל על ידי לקוח",
+      "description": "הלקוח ביקש להפסיק את התהליך לפני השלמתו",
+      "next_nodes": [
+        { "node_id": "final", "label": "סיום הטיפול" }
+      ]
+    },
+    {
+      "id": "closed_without_repair",
+      "title": "נסגר ללא תיקון",
+      "description": "התהליך נסגר ללא השלמת תיקון בפועל",
+      "next_nodes": [
+        { "node_id": "final", "label": "סיום הטיפול" }
+      ]
+    },
+    {
+      "id": "unrepairable",
+      "title": "לא ניתן לתיקון",
+      "description": "נמצא שלא ניתן לתקן את המכשיר במסגרת התהליך",
+      "next_nodes": [
+        { "node_id": "final", "label": "סיום הטיפול" }
+      ]
+    },
+    {
+      "id": "final",
+      "title": "סיום הטיפול",
+      "description": "הטיפול במכשיר הסתיים והרשומה נסגרה",
+      "next_nodes": []
+    }
+  ]
+}

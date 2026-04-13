@@ -55,34 +55,32 @@ export function NavUser({
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="h-14 rounded-2xl border border-sidebar-border bg-sidebar px-3 hover:bg-sidebar-accent/60"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <Avatar className="h-9 w-9 rounded-xl">
+              <Avatar className="h-8 w-8 rounded-lg">
                 <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-xl bg-primary/15 text-foreground">
+                <AvatarFallback className="rounded-lg bg-primary/15 text-foreground">
                   {fallback}
                 </AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-start text-sm leading-tight">
                 <span className="truncate font-medium">{user.name || "משתמש"}</span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {user.email}
-                </span>
+                <span className="truncate text-xs text-muted-foreground">{user.email}</span>
               </div>
-              <EllipsisVerticalIcon className="ms-auto size-4 text-muted-foreground" />
+              <EllipsisVerticalIcon className="ms-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-2xl"
+            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
             side={isMobile ? "bottom" : "right"}
             align="end"
-            sideOffset={6}
+            sideOffset={4}
           >
             <DropdownMenuLabel className="p-0 font-normal">
-              <div className="flex items-center gap-3 px-3 py-3 text-start text-sm" dir="rtl">
-                <Avatar className="h-9 w-9 rounded-xl">
+              <div className="flex items-center gap-2 px-2 py-1.5 text-start text-sm" dir="rtl">
+                <Avatar className="h-8 w-8 rounded-lg">
                   <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-xl bg-primary/15 text-foreground">
+                  <AvatarFallback className="rounded-lg bg-primary/15 text-foreground">
                     {fallback}
                   </AvatarFallback>
                 </Avatar>
