@@ -20,6 +20,7 @@ import {
   InfoPanelStat,
   InfoPanelStats,
 } from "@/components/info-panel"
+import { PageBody, PageMainContent, PageMainLayout, PageMainRail } from "@/components/page-main-layout"
 import { SiteHeader } from "@/components/site-header"
 import { TrackRecordData } from "@/components/track-record-data"
 import {
@@ -408,8 +409,8 @@ export default function TrackPage() {
           onOrganizationChange={handleOrganizationChange}
         />
 
-        <div className="flex flex-1 flex-col">
-          <div className="page-stack flex-1 px-4 py-6 md:px-6">
+        <PageBody>
+          <div className="page-stack flex-1">
             {organizationsError ? (
               <Alert variant="destructive">
                 <CircleAlert className="size-4" />
@@ -427,16 +428,18 @@ export default function TrackPage() {
             ) : null}
 
             {loadingTrack ? (
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-                <div className="space-y-6">
+              <PageMainLayout>
+                <PageMainContent>
                   <Skeleton className="h-32 rounded-3xl" />
                   <Skeleton className="h-96 rounded-3xl" />
-                </div>
-                <Skeleton className="h-[32rem] rounded-3xl" />
-              </div>
+                </PageMainContent>
+                <PageMainRail>
+                  <Skeleton className="h-[32rem] rounded-3xl" />
+                </PageMainRail>
+              </PageMainLayout>
             ) : track ? (
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-                <div className="space-y-6">
+              <PageMainLayout>
+                <PageMainContent>
                   <Card className="border-border/70 shadow-none">
                     <CardHeader className="gap-4">
                       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -473,8 +476,9 @@ export default function TrackPage() {
                       />
                     </CardContent>
                   </Card>
-                </div>
+                </PageMainContent>
 
+                <PageMainRail>
                 <InfoPanel>
                   <InfoPanelHeader
                     icon={Route}
@@ -535,7 +539,8 @@ export default function TrackPage() {
                     </InfoPanelSection>
                   </InfoPanelBody>
                 </InfoPanel>
-              </div>
+                </PageMainRail>
+              </PageMainLayout>
             ) : (
               <Alert variant="destructive">
                 <CircleAlert className="size-4" />
@@ -544,7 +549,7 @@ export default function TrackPage() {
               </Alert>
             )}
           </div>
-        </div>
+        </PageBody>
       </SidebarInset>
     </SidebarProvider>
   )

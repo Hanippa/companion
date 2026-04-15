@@ -13,6 +13,7 @@ import {
   InfoPanelStat,
   InfoPanelStats,
 } from "@/components/info-panel"
+import { PageBody, PageMainContent, PageMainLayout, PageMainRail } from "@/components/page-main-layout"
 import { SiteHeader } from "@/components/site-header"
 import { TrackTypeGraph } from "@/components/track-type-graph"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -384,14 +385,18 @@ export default function TrackTypesPage() {
           onOrganizationChange={handleOrganizationChange}
         />
 
-        <div className="flex flex-1 flex-col">
-          <div className="page-stack flex-1 px-4 py-6 md:px-6">
+        <PageBody>
+          <div className="page-stack flex-1">
             {loadingOrganizations || loadingTrackTypes ? (
-              <div className="grid gap-6 xl:grid-cols-[22rem_minmax(0,1fr)_24rem]">
-                <Skeleton className="h-[36rem] rounded-3xl" />
-                <Skeleton className="h-[36rem] rounded-3xl" />
-                <Skeleton className="h-[36rem] rounded-3xl" />
-              </div>
+              <PageMainLayout>
+                <PageMainContent className="grid gap-6 2xl:grid-cols-[22rem_minmax(0,1fr)]">
+                  <Skeleton className="h-[36rem] rounded-3xl" />
+                  <Skeleton className="h-[36rem] rounded-3xl" />
+                </PageMainContent>
+                <PageMainRail>
+                  <Skeleton className="h-[36rem] rounded-3xl" />
+                </PageMainRail>
+              </PageMainLayout>
             ) : organizationsError ? (
               <Alert variant="destructive">
                 <CircleAlert className="size-4" />
@@ -405,7 +410,8 @@ export default function TrackTypesPage() {
                 <AlertDescription>לא הצלחנו לזהות את הארגון לעמוד הזה.</AlertDescription>
               </Alert>
             ) : (
-              <div className="grid gap-6 xl:grid-cols-[22rem_minmax(0,1fr)_24rem]">
+              <PageMainLayout>
+                <PageMainContent className="grid gap-6 2xl:grid-cols-[22rem_minmax(0,1fr)]">
                 <Card className="border-border/70 shadow-none">
                   <CardHeader className="gap-3">
                     <div className="flex items-center justify-between gap-3">
@@ -568,7 +574,9 @@ export default function TrackTypesPage() {
                     </CardContent>
                   </Card>
                 </div>
+                </PageMainContent>
 
+                <PageMainRail>
                 <InfoPanel>
                   <InfoPanelHeader
                     icon={Workflow}
@@ -621,10 +629,11 @@ export default function TrackTypesPage() {
                     </InfoPanelSection>
                   </InfoPanelBody>
                 </InfoPanel>
-              </div>
+                </PageMainRail>
+              </PageMainLayout>
             )}
           </div>
-        </div>
+        </PageBody>
       </SidebarInset>
     </SidebarProvider>
   )

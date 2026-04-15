@@ -139,7 +139,6 @@
   html {
     @apply h-full;
     font-family: "Fredoka", sans-serif;
-    scrollbar-gutter: stable;
     background-color: var(--background);
   }
 
@@ -147,7 +146,7 @@
     @apply min-h-full font-fredoka antialiased;
     font-family: "Fredoka", sans-serif;
     color: var(--foreground);
-    overflow-y: scroll;
+    overflow-y: auto;
     background:
       radial-gradient(circle at top left, rgba(203, 255, 77, 0.08), transparent 18rem),
       linear-gradient(180deg, #fafbf7 0%, #f5f6f1 100%);
@@ -167,6 +166,8 @@
 
   body[data-scroll-locked] {
     padding-right: 0 !important;
+    margin-right: 0 !important;
+    margin-left: 0 !important;
   }
 }
 
@@ -201,6 +202,22 @@
   .page-stack {
     @apply flex w-full flex-col gap-6;
     animation: page-enter 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .page-body {
+    @apply flex flex-1 flex-col px-4 py-6 md:px-6;
+  }
+
+  .main-two-pane {
+    @apply grid gap-6 xl:grid-cols-[22rem_minmax(0,1fr)] xl:items-start;
+  }
+
+  .main-rail {
+    @apply min-w-0;
+  }
+
+  .main-content {
+    @apply min-w-0 space-y-6;
   }
 
   .soft-divider {

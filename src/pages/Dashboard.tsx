@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react"
-import { useLocation, useNavigate, useParams } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 import {
   ArrowLeft,
   Building2,
@@ -7,6 +7,7 @@ import {
   GitBranchPlus,
   MapPinned,
   Route,
+  ShieldUser,
   Users2,
 } from "lucide-react"
 
@@ -19,6 +20,7 @@ import {
   InfoPanelStat,
   InfoPanelStats,
 } from "@/components/info-panel"
+import { PageMainContent, PageMainLayout, PageMainRail } from "@/components/page-main-layout"
 import { SiteHeader } from "@/components/site-header"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
@@ -47,11 +49,6 @@ import {
   getPointSegment,
   getRecordIdFromSegment,
 } from "@/lib/drilldown"
-import {
-  dashboardLoadFixture,
-  isDashboardMockMode,
-  type MockDashboardPoint,
-} from "@/lib/mock/dashboard-load-fixture"
 import { getOrganizationsCached } from "@/lib/organizations"
 import { getProfilesByIdsCached } from "@/lib/profile-cache"
 import { supabase } from "@/lib/supabase"
@@ -86,6 +83,12 @@ type ProfileSummary = {
   avatar_url: string | null
 }
 
+type OrganizationMemberSummary = {
+  user_id: string
+  role: string | null
+  title: string | null
+}
+
 const getOrganizationLabel = (organization: Organization) =>
   organization.name?.trim() || `ארגון #${organization.id}`
 
@@ -102,12 +105,9 @@ const getPointDescription = (point: Point) =>
 
 export default function Dashboard() {
   const { user } = useAuth()
-  const location = useLocation()
   const navigate = useNavigate()
   const { organizationSlug } = useParams()
   const organizationIdFromRoute = getRecordIdFromSegment(organizationSlug)
-  const useMockMembers =
-    location.pathname === "/dashboard" && isDashboardMockMode(location.search)
 
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [selectedOrganizationId, setSelectedOrganizationId] = useState("")
@@ -116,7 +116,7 @@ export default function Dashboard() {
   const [points, setPoints] = useState<Point[]>([])
   const [pointsWithStats, setPointsWithStats] = useState<PointWithStats[]>([])
   const [organizationMembersCount, setOrganizationMembersCount] = useState(0)
-  const [organizationMemberIds, setOrganizationMemberIds] = useState<string[]>([])
+  const [organizationMembers, setOrganizationMembers] = useState<OrganizationMemberSummary[]>([])
   const [profilesById, setProfilesById] = useState<Record<string, ProfileSummary>>({})
   const [canManageTrackTypes, setCanManageTrackTypes] = useState(false)
   const [loadingPoints, setLoadingPoints] = useState(false)
@@ -128,26 +128,6 @@ export default function Dashboard() {
     const fetchOrganizations = async () => {
       setLoadingOrganizations(true)
       setOrganizationsError(null)
-
-      if (useMockMembers) {
-        const nextOrganizations = dashboardLoadFixture.organizations
-
-        if (!isMounted) return
-
-        setOrganizations(nextOrganizations)
-        setSelectedOrganizationId((currentValue) => {
-          if (
-            currentValue &&
-            nextOrganizations.some((organization) => organization.id.toString() === currentValue)
-          ) {
-            return currentValue
-          }
-
-          return nextOrganizations[0] ? nextOrganizations[0].id.toString() : ""
-        })
-        setLoadingOrganizations(false)
-        return
-      }
 
       try {
         const nextOrganizations = await getOrganizationsCached()
@@ -179,9 +159,7 @@ export default function Dashboard() {
       }
     }
 
-    if (useMockMembers) {
-      void fetchOrganizations()
-    } else if (user) {
+    if (user) {
       void fetchOrganizations()
     } else {
       setOrganizations([])
@@ -192,7 +170,7 @@ export default function Dashboard() {
     return () => {
       isMounted = false
     }
-  }, [user, useMockMembers])
+  }, [user])
 
   const selectedOrganization =
     organizations.find((organization) => {
@@ -210,7 +188,7 @@ export default function Dashboard() {
 
     if (!organizationSlug) {
       if (organizations.length === 1) {
-        navigate(`/${getOrganizationSegment(organizations[0])}${location.search}`, {
+        navigate(`/${getOrganizationSegment(organizations[0])}`, {
           replace: true,
         })
       }
@@ -228,11 +206,10 @@ export default function Dashboard() {
 
     const expectedSegment = getOrganizationSegment(selectedOrganization)
     if (expectedSegment !== organizationSlug) {
-      navigate(`/${expectedSegment}${location.search}`, { replace: true })
+      navigate(`/${expectedSegment}`, { replace: true })
     }
   }, [
     loadingOrganizations,
-    location.search,
     organizations,
     organizationsError,
     navigate,
@@ -249,7 +226,7 @@ export default function Dashboard() {
         setPoints([])
         setPointsWithStats([])
         setOrganizationMembersCount(0)
-        setOrganizationMemberIds([])
+        setOrganizationMembers([])
         setPointsError(null)
         setLoadingPoints(false)
         return
@@ -257,29 +234,6 @@ export default function Dashboard() {
 
       setLoadingPoints(true)
       setPointsError(null)
-
-      if (useMockMembers) {
-        const nextPoints =
-          (dashboardLoadFixture.pointsByOrganization[
-            selectedOrganization.id
-          ] as MockDashboardPoint[] | undefined) ?? []
-        const nextOrganizationMemberIds =
-          dashboardLoadFixture.organizationMemberIdsByOrganization[
-            selectedOrganization.id
-          ] ?? []
-
-        if (!isMounted) return
-
-        setPoints(
-          nextPoints.map(({ membersCount, tracksCount, memberIds, ...point }) => point)
-        )
-        setPointsWithStats(nextPoints)
-        setOrganizationMembersCount(nextOrganizationMemberIds.length)
-        setOrganizationMemberIds(nextOrganizationMemberIds)
-        setCanManageTrackTypes(true)
-        setLoadingPoints(false)
-        return
-      }
 
       const [pointsResult, membersResult] = await Promise.all([
         supabase
@@ -289,7 +243,7 @@ export default function Dashboard() {
           .order("name", { ascending: true, nullsFirst: false }),
         supabase
           .from("organization_users")
-          .select("user_id, role")
+          .select("user_id, role, title")
           .eq("organization_id", selectedOrganization.id)
           .eq("status", "active"),
       ])
@@ -304,7 +258,7 @@ export default function Dashboard() {
         setPoints([])
         setPointsWithStats([])
         setOrganizationMembersCount(0)
-        setOrganizationMemberIds([])
+        setOrganizationMembers([])
         setCanManageTrackTypes(false)
         setPointsError("לא הצלחנו לטעון את הנקודות של הארגון הזה כרגע.")
         setLoadingPoints(false)
@@ -312,7 +266,7 @@ export default function Dashboard() {
       }
 
       const nextPoints = (pointsResult.data ?? []) as Point[]
-      const organizationMembers = membersResult.data ?? []
+      const organizationMembers = (membersResult.data ?? []) as OrganizationMemberSummary[]
       const nextOrganizationMemberIds = organizationMembers.map((member) => member.user_id)
       setCanManageTrackTypes(
         organizationMembers.some(
@@ -322,7 +276,7 @@ export default function Dashboard() {
 
       setPoints(nextPoints)
       setOrganizationMembersCount(nextOrganizationMemberIds.length)
-      setOrganizationMemberIds(nextOrganizationMemberIds)
+      setOrganizationMembers(organizationMembers)
 
       if (nextPoints.length === 0) {
         setPointsWithStats([])
@@ -389,7 +343,7 @@ export default function Dashboard() {
     return () => {
       isMounted = false
     }
-  }, [selectedOrganization, useMockMembers, user?.id])
+  }, [selectedOrganization, user?.id])
 
   useEffect(() => {
     let isMounted = true
@@ -397,7 +351,9 @@ export default function Dashboard() {
     const loadProfiles = async () => {
       const allIds = Array.from(
         new Set([
-          ...organizationMemberIds.slice(0, ORGANIZATION_MEMBER_PREVIEW_LIMIT),
+          ...organizationMembers
+            .slice(0, ORGANIZATION_MEMBER_PREVIEW_LIMIT)
+            .map((member) => member.user_id),
           ...pointsWithStats.flatMap((point) =>
             point.memberIds.slice(0, POINT_MEMBER_AVATAR_LIMIT)
           ),
@@ -406,20 +362,6 @@ export default function Dashboard() {
 
       if (allIds.length === 0) {
         setProfilesById({})
-        return
-      }
-
-      if (useMockMembers) {
-        const nextProfilesById = Object.fromEntries(
-          allIds.flatMap((userId) => {
-            const profile = dashboardLoadFixture.profilesById[userId]
-            return profile ? ([[userId, profile]] as const) : []
-          })
-        ) as Record<string, ProfileSummary>
-
-        if (!isMounted) return
-
-        setProfilesById(nextProfilesById)
         return
       }
 
@@ -442,14 +384,14 @@ export default function Dashboard() {
     return () => {
       isMounted = false
     }
-  }, [organizationMemberIds, pointsWithStats, useMockMembers])
+  }, [organizationMembers, pointsWithStats])
 
   const organizationOptions = organizations.map((organization) => ({
     id: organization.id,
     label: getOrganizationLabel(organization),
   }))
 
-  const displayedOrganizationMemberIds = organizationMemberIds.slice(
+  const displayedOrganizationMembers = organizationMembers.slice(
     0,
     ORGANIZATION_MEMBER_PREVIEW_LIMIT
   )
@@ -462,12 +404,11 @@ export default function Dashboard() {
     if (!nextOrganization) return
 
     setSelectedOrganizationId(value)
-    navigate(`/${getOrganizationSegment(nextOrganization)}${location.search}`)
+    navigate(`/${getOrganizationSegment(nextOrganization)}`)
   }
 
   const handlePointOpen = (point: Point) => {
     if (!selectedOrganization) return
-    if (useMockMembers) return
     navigate(`/${getOrganizationSegment(selectedOrganization)}/${getPointSegment(point)}`)
   }
 
@@ -520,8 +461,9 @@ export default function Dashboard() {
                 ) : loadingPoints ? (
                   <DashboardSkeleton />
                 ) : (
-                  <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
-                    <InfoPanel>
+                  <PageMainLayout>
+                    <PageMainRail>
+                      <InfoPanel>
                       <InfoPanelHeader
                         icon={Building2}
                         title={getOrganizationLabel(selectedOrganization)}
@@ -546,29 +488,39 @@ export default function Dashboard() {
                             value={points.length}
                             description="נקודות פעילות ושיוך בתוך הארגון"
                           />
-                          <InfoPanelStat
-                            icon={Users2}
-                            label="חברים"
-                            value={organizationMembersCount}
-                            description="חברי ארגון פעילים הזמינים עבורך"
-                          />
                         </InfoPanelStats>
 
                         <InfoPanelSection
                           icon={Users2}
                           title="חברי ארגון"
-                          action={
-                            <Badge variant="secondary" className="rounded-full">
-                              עד {Math.min(organizationMembersCount, ORGANIZATION_MEMBER_PREVIEW_LIMIT)}
-                            </Badge>
-                          }
+                          description={`סה"כ ${organizationMembersCount} חברי ארגון פעילים`}
                         >
                           <OrganizationMembersList
-                            memberIds={displayedOrganizationMemberIds}
+                            members={displayedOrganizationMembers}
                             profilesById={profilesById}
                             totalCount={organizationMembersCount}
                           />
                         </InfoPanelSection>
+
+                        {canManageTrackTypes ? (
+                          <InfoPanelSection
+                            icon={ShieldUser}
+                            title="ניהול צוות"
+                            description="בעלי ארגון יכולים ליצור משתמשים חדשים ולבנות את הצוות הארגוני שלהם."
+                            action={
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="rounded-xl"
+                                onClick={() =>
+                                  navigate(`/${getOrganizationSegment(selectedOrganization)}/team`)
+                                }
+                              >
+                                ניהול צוות
+                              </Button>
+                            }
+                          />
+                        ) : null}
 
                         {canManageTrackTypes ? (
                           <InfoPanelSection
@@ -591,8 +543,10 @@ export default function Dashboard() {
                         ) : null}
                       </InfoPanelBody>
                     </InfoPanel>
+                    </PageMainRail>
 
-                    <Card className="border-border/70 shadow-none">
+                    <PageMainContent>
+                      <Card className="border-border/70 shadow-none">
                       <CardHeader className="gap-3">
                         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                           <div className="space-y-2">
@@ -610,11 +564,6 @@ export default function Dashboard() {
                             סה"כ {points.length} נקודות
                           </Badge>
                         </div>
-                        {useMockMembers ? (
-                          <CardDescription>
-                            מצב הדמיה פעיל. הנתונים נטענים מקובץ דמה מקומי, והתמונות עצמן נטענות מ-`randomuser.me` כדי לתת תחושת עומס מציאותית יותר.
-                          </CardDescription>
-                        ) : null}
                       </CardHeader>
 
                       <CardContent>
@@ -696,10 +645,9 @@ export default function Dashboard() {
                                   <Button
                                     className="group w-full justify-between rounded-xl"
                                     variant="outline"
-                                    disabled={useMockMembers}
                                     onClick={() => handlePointOpen(point)}
                                   >
-                                    {useMockMembers ? "זמין בנתונים אמיתיים" : "מעבר לעמוד הנקודה"}
+                                    מעבר לעמוד הנקודה
                                     <ArrowLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-1" />
                                   </Button>
                                 </CardFooter>
@@ -709,7 +657,8 @@ export default function Dashboard() {
                         )}
                       </CardContent>
                     </Card>
-                  </div>
+                    </PageMainContent>
+                  </PageMainLayout>
                 )}
               </div>
             </div>
@@ -722,8 +671,9 @@ export default function Dashboard() {
 
 function DashboardSkeleton() {
   return (
-    <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
-      <InfoPanel>
+    <PageMainLayout>
+      <PageMainRail>
+        <InfoPanel>
         <CardHeader className="gap-3">
           <Skeleton className="h-4 w-24" />
           <Skeleton className="h-8 w-40" />
@@ -743,8 +693,10 @@ function DashboardSkeleton() {
           </div>
         </CardContent>
       </InfoPanel>
+      </PageMainRail>
 
-      <Card className="border-border/70 shadow-none">
+      <PageMainContent>
+        <Card className="border-border/70 shadow-none">
         <CardHeader className="gap-3">
           <Skeleton className="h-6 w-36" />
           <Skeleton className="h-4 w-full max-w-2xl" />
@@ -757,20 +709,21 @@ function DashboardSkeleton() {
           </div>
         </CardContent>
       </Card>
-    </div>
+      </PageMainContent>
+    </PageMainLayout>
   )
 }
 
 function OrganizationMembersList({
-  memberIds,
+  members,
   profilesById,
   totalCount,
 }: {
-  memberIds: string[]
+  members: OrganizationMemberSummary[]
   profilesById: Record<string, ProfileSummary>
   totalCount: number
 }) {
-  if (memberIds.length === 0) {
+  if (members.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border/70 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
         עדיין אין חברים זמינים להצגה בארגון הזה.
@@ -778,36 +731,38 @@ function OrganizationMembersList({
     )
   }
 
-  const hiddenMembersCount = Math.max(totalCount - memberIds.length, 0)
+  const hiddenMembersCount = Math.max(totalCount - members.length, 0)
 
   return (
     <div className="space-y-2">
       <div className="max-h-[28rem] space-y-2 overflow-y-auto pe-1">
-        {memberIds.map((memberId) => {
-          const member = profilesById[memberId]
+        {members.map((organizationMember) => {
+          const profile = profilesById[organizationMember.user_id]
+          const organizationMemberTitle = organizationMember.title?.trim() || "חבר בארגון"
+          const memberDisplayName = profile?.display_name?.trim() || "חבר צוות"
 
           return (
             <div
-              key={memberId}
+              key={organizationMember.user_id}
               className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/15 px-3 py-2.5"
             >
               <Avatar className="size-10 rounded-xl">
                 <AvatarImage
                   className="rounded-xl"
-                  src={member?.avatar_url ?? undefined}
-                  alt={member?.display_name ?? "חבר ארגון"}
+                  src={profile?.avatar_url ?? undefined}
+                  alt={memberDisplayName}
                   loading="lazy"
                   referrerPolicy="no-referrer"
                 />
                 <AvatarFallback className="rounded-xl">
-                  {getAvatarInitials(member?.display_name)}
+                  {getAvatarInitials(profile?.display_name || organizationMemberTitle)}
                 </AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
                 <div className="truncate font-medium">
-                  {member?.display_name?.trim() || "חבר צוות"}
+                  {memberDisplayName}
                 </div>
-                <div className="truncate text-xs text-muted-foreground">חבר בארגון</div>
+                <div className="truncate text-xs text-muted-foreground">{organizationMemberTitle}</div>
               </div>
             </div>
           )

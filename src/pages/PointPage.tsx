@@ -8,6 +8,7 @@ import {
   PencilLine,
   Route,
   ShieldCheck,
+  UserPlus,
   Users,
 } from "lucide-react"
 
@@ -22,6 +23,7 @@ import {
   InfoPanelStat,
   InfoPanelStats,
 } from "@/components/info-panel"
+import { PageBody, PageMainContent, PageMainLayout, PageMainRail } from "@/components/page-main-layout"
 import { SiteHeader } from "@/components/site-header"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -113,6 +115,7 @@ export default function PointPage() {
   const [loadingMembers, setLoadingMembers] = useState(true)
   const [membersError, setMembersError] = useState<string | null>(null)
   const [canEdit, setCanEdit] = useState(false)
+  const [canManageTeam, setCanManageTeam] = useState(false)
   const [loadingPermissions, setLoadingPermissions] = useState(true)
   const [pointName, setPointName] = useState("")
   const [pointNotes, setPointNotes] = useState("")
@@ -197,7 +200,7 @@ export default function PointPage() {
       setMembersError(null)
       setLoadingPermissions(true)
 
-      const [tracksResult, membersResult, permissionResult, pointResult] = await Promise.all([
+      const [tracksResult, membersResult, orgPermissionResult, pointPermissionResult, pointResult] = await Promise.all([
         supabase
           .from("tracking_records")
           .select("id, ref_id, point_id, track_type_id, name, status, current_step, data, notes, track_type:track_types(id, name, status, form_schema, track_schema, vesrion)")
@@ -215,6 +218,13 @@ export default function PointPage() {
           .eq("user_id", user?.id ?? "")
           .eq("status", "active")
           .in("role", ["admin", "owner"]),
+        supabase
+          .from("point_users")
+          .select("role")
+          .eq("point_id", pointIdFromRoute)
+          .eq("user_id", user?.id ?? "")
+          .eq("status", "active")
+          .eq("role", "admin"),
         supabase
           .from("points")
           .select("id, organization_id, name, notes, status")
@@ -285,11 +295,15 @@ export default function PointPage() {
       }
       setLoadingTracks(false)
 
-      if (permissionResult.error) {
-        console.error("Error fetching point permissions:", permissionResult.error)
+      if (orgPermissionResult.error || pointPermissionResult.error) {
+        console.error("Error fetching point permissions:", orgPermissionResult.error || pointPermissionResult.error)
         setCanEdit(false)
+        setCanManageTeam(false)
       } else {
-        setCanEdit((permissionResult.data ?? []).length > 0)
+        const hasOrganizationManagementAccess = (orgPermissionResult.data ?? []).length > 0
+        const hasPointAdminAccess = (pointPermissionResult.data ?? []).length > 0
+        setCanEdit(hasOrganizationManagementAccess)
+        setCanManageTeam(hasOrganizationManagementAccess || hasPointAdminAccess)
       }
       setLoadingPermissions(false)
 
@@ -376,12 +390,12 @@ export default function PointPage() {
           selectedOrganizationId={selectedOrganization?.id.toString()}
           onOrganizationChange={handleOrganizationChange}
         />
-        <div className="flex flex-1 flex-col">
+        <PageBody>
           <div className="@container/main flex flex-1 flex-col">
-            <div className="page-shell">
-              <div className="page-stack" dir="rtl">
+            <div className="page-stack" dir="rtl">
               {loadingOrganizations || loadingPoint ? (
-                <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+                <PageMainLayout>
+                    <PageMainRail>
                     <InfoPanel>
                       <CardHeader>
                         <Skeleton className="h-8 w-40" />
@@ -397,7 +411,8 @@ export default function PointPage() {
                         <Skeleton className="h-28 w-full rounded-xl" />
                       </CardContent>
                     </InfoPanel>
-                    <div className="space-y-5">
+                    </PageMainRail>
+                    <PageMainContent>
                       <Card className="rounded-[2rem]">
                         <CardHeader><Skeleton className="h-6 w-32" /><Skeleton className="h-4 w-64" /></CardHeader>
                         <CardContent><div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3"><Skeleton className="h-40 w-full" /><Skeleton className="h-40 w-full" /><Skeleton className="h-40 w-full" /></div></CardContent>
@@ -406,8 +421,8 @@ export default function PointPage() {
                         <CardHeader><Skeleton className="h-6 w-32" /><Skeleton className="h-4 w-56" /></CardHeader>
                         <CardContent><div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3"><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /></div></CardContent>
                       </Card>
-                    </div>
-                </div>
+                    </PageMainContent>
+                </PageMainLayout>
               ) : organizationsError || pointError ? (
                 <div>
                   <Alert variant="destructive">
@@ -425,7 +440,8 @@ export default function PointPage() {
                   </Alert>
                 </div>
               ) : (
-                <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+                <PageMainLayout>
+                    <PageMainRail>
                     <InfoPanel>
                       <InfoPanelHeader
                         icon={MapPinned}
@@ -478,34 +494,62 @@ export default function PointPage() {
                           icon={ShieldCheck}
                           title="גישה וניהול"
                           description={
-                            canEdit
-                              ? "עריכת הנקודה נשארת בעמוד נפרד כדי לשמור על תצוגת הקריאה נקייה ופשוטה."
-                              : "עריכה זמינה רק לבעלי הארגון ולמנהלים."
+                            canEdit || canManageTeam
+                              ? "ניהול הצוות ועריכת הנקודה נשארים בעמודים נפרדים כדי לשמור על תצוגת הקריאה נקייה ופשוטה."
+                              : "ניהול ועריכה זמינים רק לבעלי ומנהלי הארגון, או למנהלי הנקודה."
                           }
                           action={
-                            canEdit ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="rounded-xl"
-                                onClick={() =>
-                                  navigate(
-                                    `/${getOrganizationSegment(selectedOrganization)}/${getPointSegment(
-                                      currentPoint ?? {
-                                        id: pointIdFromRoute ?? 0,
-                                        organization_id: selectedOrganization.id,
-                                        name: pointName || null,
-                                        notes: pointNotes || null,
-                                        status: pointStatus,
-                                      }
-                                    )}/edit`
-                                  )
-                                }
-                                disabled={loadingPermissions || !currentPoint}
-                              >
-                                <PencilLine className="size-4" />
-                                עריכת נקודה
-                              </Button>
+                            canEdit || canManageTeam ? (
+                              <div className="flex flex-wrap justify-end gap-2">
+                                {canManageTeam ? (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-xl"
+                                    onClick={() =>
+                                      navigate(
+                                        `/${getOrganizationSegment(selectedOrganization)}/${getPointSegment(
+                                          currentPoint ?? {
+                                            id: pointIdFromRoute ?? 0,
+                                            organization_id: selectedOrganization.id,
+                                            name: pointName || null,
+                                            notes: pointNotes || null,
+                                            status: pointStatus,
+                                          }
+                                        )}/team`
+                                      )
+                                    }
+                                    disabled={loadingPermissions || !currentPoint}
+                                  >
+                                    <UserPlus className="size-4" />
+                                    ניהול צוות נקודה
+                                  </Button>
+                                ) : null}
+                                {canEdit ? (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-xl"
+                                    onClick={() =>
+                                      navigate(
+                                        `/${getOrganizationSegment(selectedOrganization)}/${getPointSegment(
+                                          currentPoint ?? {
+                                            id: pointIdFromRoute ?? 0,
+                                            organization_id: selectedOrganization.id,
+                                            name: pointName || null,
+                                            notes: pointNotes || null,
+                                            status: pointStatus,
+                                          }
+                                        )}/edit`
+                                      )
+                                    }
+                                    disabled={loadingPermissions || !currentPoint}
+                                  >
+                                    <PencilLine className="size-4" />
+                                    עריכת נקודה
+                                  </Button>
+                                ) : null}
+                              </div>
                             ) : (
                               <Badge variant="outline" className="rounded-full">
                                 קריאה בלבד
@@ -515,8 +559,9 @@ export default function PointPage() {
                         />
                       </InfoPanelBody>
                     </InfoPanel>
+                    </PageMainRail>
 
-                    <div className="space-y-5">
+                    <PageMainContent>
                       <Card className="overflow-hidden border-border/70 shadow-none">
                         <CardHeader className="gap-3">
                           <div className="flex items-start justify-between gap-3">
@@ -630,13 +675,12 @@ export default function PointPage() {
                           )}
                         </CardContent>
                       </Card>
-                    </div>
-                </div>
+                    </PageMainContent>
+                </PageMainLayout>
               )}
-              </div>
             </div>
           </div>
-        </div>
+        </PageBody>
       </SidebarInset>
     </SidebarProvider>
   )
