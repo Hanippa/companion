@@ -1,9 +1,16 @@
-import { Check, CircleDot, LoaderCircle, Route } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { Check, CircleDot, LoaderCircle, Route, TimerReset } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { getAvatarInitials } from "@/lib/avatar"
 import type { TrackNode, TrackNodeConnection } from "@/lib/track-schema"
+import {
+  calculateTrackSlaSummary,
+  formatMinutesLabel,
+  formatRemainingLabel,
+} from "@/lib/track-sla"
 import { cn } from "@/lib/utils"
 
 export type TrackNodeAction = TrackNodeConnection
@@ -25,6 +32,9 @@ type TrackStepperProps = {
   currentNodeId: string | null
   events?: TrackStepperEvent[]
   pendingTransitionId?: string | null
+  createdAt?: string | null
+  slaMode?: string | null
+  baseSlaMinutes?: number | null
   onTransitionSelect?: (action: TrackNodeAction, sourceNode: TrackNode) => void
   className?: string
 }
@@ -162,6 +172,9 @@ function NodeCard({
   isCurrent,
   isCompleted,
   pendingTransitionId,
+  currentNodeRemainingMs = null,
+  isCurrentNodeOverdue = false,
+  slaMode = "derived",
   onTransitionSelect,
 }: {
   node: TrackNode
@@ -169,6 +182,9 @@ function NodeCard({
   isCurrent: boolean
   isCompleted: boolean
   pendingTransitionId: string | null
+  currentNodeRemainingMs?: number | null
+  isCurrentNodeOverdue?: boolean
+  slaMode?: string | null
   onTransitionSelect?: (action: TrackNodeAction, sourceNode: TrackNode) => void
 }) {
   const canAdvance = isCurrent && node.next_nodes.length > 0 && onTransitionSelect
@@ -191,6 +207,27 @@ function NodeCard({
                 {node.description}
               </div>
             ) : null}
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Badge variant="outline" className="rounded-full gap-1">
+                <TimerReset className="size-3.5" />
+                SLA צומת: {formatMinutesLabel(node.sla ?? null)}
+              </Badge>
+              {typeof node.sla_modifier === "number" && node.sla_modifier > 0 ? (
+                <Badge variant="secondary" className="rounded-full">
+                  {slaMode === "manual"
+                    ? `+${formatMinutesLabel(node.sla_modifier)} ignored`
+                    : `+${formatMinutesLabel(node.sla_modifier)} ל־SLA הכולל`}
+                </Badge>
+              ) : null}
+              {isCurrent && currentNodeRemainingMs !== null ? (
+                <Badge
+                  variant={isCurrentNodeOverdue ? "destructive" : "default"}
+                  className="rounded-full"
+                >
+                  {formatRemainingLabel(currentNodeRemainingMs)}
+                </Badge>
+              ) : null}
+            </div>
           </div>
           <div
             className={cn(
@@ -253,9 +290,19 @@ export function TrackStepper({
   currentNodeId,
   events = [],
   pendingTransitionId = null,
+  createdAt = null,
+  slaMode = "derived",
+  baseSlaMinutes = null,
   onTransitionSelect,
   className,
 }: TrackStepperProps) {
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 30000)
+    return () => window.clearInterval(interval)
+  }, [])
+
   const orderedEvents = [...events].sort(
     (left, right) =>
       new Date(left.created_at).getTime() - new Date(right.created_at).getTime()
@@ -275,6 +322,19 @@ export function TrackStepper({
     currentNodeId && nodeMap.has(currentNodeId)
       ? currentNodeId
       : visibleNodes[visibleNodes.length - 1]?.id ?? startNodeId
+  const trackSlaSummary = useMemo(
+    () =>
+      calculateTrackSlaSummary({
+        schema: { title: null, description: null, start_node_id: startNodeId, end_node_id: null, nodes },
+        events: orderedEvents,
+        createdAt,
+        currentNodeId: resolvedCurrentNodeId,
+        baseSlaMinutes,
+        slaMode,
+        now,
+      }),
+    [baseSlaMinutes, createdAt, nodes, now, orderedEvents, resolvedCurrentNodeId, slaMode, startNodeId]
+  )
 
   if (nodes.length === 0) {
     return (
@@ -329,6 +389,11 @@ export function TrackStepper({
               isCurrent={isCurrent}
               isCompleted={isCompleted}
               pendingTransitionId={pendingTransitionId}
+              currentNodeRemainingMs={
+                isCurrent ? trackSlaSummary.currentNodeRemainingMs : null
+              }
+              isCurrentNodeOverdue={isCurrent ? trackSlaSummary.isCurrentNodeOverdue : false}
+              slaMode={slaMode}
               onTransitionSelect={onTransitionSelect}
             />
           </div>

@@ -41,6 +41,7 @@ type TrackTypeRecord = {
   id: number
   name: string | null
   status: string | null
+  sla: number | null
   form_schema: unknown
   track_schema: unknown
   vesrion: number | null
@@ -57,12 +58,16 @@ const DEFAULT_TRACK_SCHEMA = {
       id: "start",
       title: "התחלה",
       description: "צומת פתיחה ראשוני",
+      sla: 15,
+      sla_modifier: 0,
       next_nodes: [{ node_id: "end", label: "סיום" }],
     },
     {
       id: "end",
       title: "סיום",
       description: "צומת סיום",
+      sla: 15,
+      sla_modifier: 0,
       next_nodes: [],
     },
   ],
@@ -93,6 +98,7 @@ export default function TrackTypesPage() {
   const [selectedTrackTypeId, setSelectedTrackTypeId] = useState<string>("new")
   const [draftName, setDraftName] = useState("")
   const [draftStatus, setDraftStatus] = useState("active")
+  const [draftSla, setDraftSla] = useState("0")
   const [draftVersion, setDraftVersion] = useState("1")
   const [draftTrackSchema, setDraftTrackSchema] = useState(stringifyJson(DEFAULT_TRACK_SCHEMA))
   const [draftFormSchema, setDraftFormSchema] = useState(stringifyJson(DEFAULT_FORM_SCHEMA))
@@ -157,7 +163,7 @@ export default function TrackTypesPage() {
           .eq("role", "owner"),
         supabase
           .from("track_types")
-          .select("id, name, status, form_schema, track_schema, vesrion")
+          .select("id, name, status, sla, form_schema, track_schema, vesrion")
           .eq("organization_id", selectedOrganization.id)
           .order("name", { ascending: true, nullsFirst: false }),
       ])
@@ -222,6 +228,7 @@ export default function TrackTypesPage() {
     if (selectedTrackTypeId === "new") {
       setDraftName("")
       setDraftStatus("active")
+      setDraftSla("0")
       setDraftVersion("1")
       setDraftTrackSchema(stringifyJson(DEFAULT_TRACK_SCHEMA))
       setDraftFormSchema(stringifyJson(DEFAULT_FORM_SCHEMA))
@@ -234,6 +241,7 @@ export default function TrackTypesPage() {
 
     setDraftName(selectedTrackType.name?.trim() || "")
     setDraftStatus(selectedTrackType.status?.trim() || "active")
+    setDraftSla(String(selectedTrackType.sla ?? 0))
     setDraftVersion(String(selectedTrackType.vesrion ?? 1))
     setDraftTrackSchema(stringifyJson(selectedTrackType.track_schema ?? DEFAULT_TRACK_SCHEMA))
     setDraftFormSchema(stringifyJson(selectedTrackType.form_schema ?? DEFAULT_FORM_SCHEMA))
@@ -310,6 +318,7 @@ export default function TrackTypesPage() {
         organization_id: selectedOrganization.id,
         name: draftName.trim() || null,
         status: draftStatus.trim() || "active",
+        sla: Number.isFinite(Number(draftSla)) ? Number(draftSla) : 0,
         vesrion: Number.isFinite(versionNumber) ? versionNumber : 1,
         track_schema: parsedTrackSchema,
         form_schema: parsedFormSchema,
@@ -319,7 +328,7 @@ export default function TrackTypesPage() {
         const { data, error } = await supabase
           .from("track_types")
           .insert(payload)
-          .select("id, name, status, form_schema, track_schema, vesrion")
+          .select("id, name, status, sla, form_schema, track_schema, vesrion")
           .single<TrackTypeRecord>()
 
         if (error || !data) throw error ?? new Error("insert-failed")
@@ -336,7 +345,7 @@ export default function TrackTypesPage() {
           .from("track_types")
           .update(payload)
           .eq("id", Number(selectedTrackTypeId))
-          .select("id, name, status, form_schema, track_schema, vesrion")
+          .select("id, name, status, sla, form_schema, track_schema, vesrion")
           .single<TrackTypeRecord>()
 
         if (error || !data) throw error ?? new Error("update-failed")
@@ -474,6 +483,7 @@ export default function TrackTypesPage() {
                             </div>
                             <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
                               <span>{previewSchema?.nodes.length ?? 0} צמתים</span>
+                              <span>SLA {trackType.sla ?? 0} דק׳</span>
                               <span>גרסה {trackType.vesrion ?? 1}</span>
                             </div>
                           </button>
@@ -513,6 +523,13 @@ export default function TrackTypesPage() {
                           <label className="text-sm font-medium">סטטוס</label>
                           <Input value={draftStatus} onChange={(event) => setDraftStatus(event.target.value)} disabled={!canManage} />
                         </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">SLA ברירת מחדל (דקות)</label>
+                          <Input value={draftSla} onChange={(event) => setDraftSla(event.target.value)} disabled={!canManage} type="number" min="0" />
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-1">
                         <div className="space-y-2">
                           <label className="text-sm font-medium">גרסה</label>
                           <Input value={draftVersion} onChange={(event) => setDraftVersion(event.target.value)} disabled={!canManage} />
@@ -594,6 +611,11 @@ export default function TrackTypesPage() {
                         label="צמתים"
                         value={normalizedTrackSchema?.nodes.length ?? 0}
                         description="מספר הצמתים שמוגדרים בתבנית הזו"
+                      />
+                      <InfoPanelStat
+                        label="SLA ברירת מחדל"
+                        value={`${draftSla || 0} דק׳`}
+                        description="משך היעד הראשי למסלול לפני modifiers"
                       />
                       <InfoPanelStat
                         label="גרסה"

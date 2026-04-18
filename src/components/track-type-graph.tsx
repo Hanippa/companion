@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { ArrowLeft, Flag, Route } from "lucide-react"
+import { ArrowLeft, Flag, Route, TimerReset } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
@@ -107,6 +107,18 @@ function GraphNodeCard({
               </Badge>
             ) : null}
           </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="outline" className="rounded-full gap-1">
+            <TimerReset className="size-3.5" />
+            SLA {typeof node.sla === "number" ? `${node.sla} דק׳` : "לא הוגדר"}
+          </Badge>
+          {typeof node.sla_modifier === "number" && node.sla_modifier > 0 ? (
+            <Badge variant="secondary" className="rounded-full">
+              +{node.sla_modifier} דק׳ modifier
+            </Badge>
+          ) : null}
         </div>
 
         {node.next_nodes.length > 0 ? (

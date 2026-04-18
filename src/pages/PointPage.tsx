@@ -47,6 +47,7 @@ import {
   type TrackNode,
   type TrackNodeConnection,
 } from "@/lib/track-schema"
+import { formatMinutesLabel } from "@/lib/track-sla"
 import { supabase } from "@/lib/supabase"
 
 type Organization = { id: number; name: string | null; notes: string | null; status: string | null }
@@ -54,7 +55,7 @@ type PointRecord = { id: number; organization_id: number; name: string | null; n
 type ProfileRecord = { id: string; display_name: string | null; avatar_url: string | null }
 type PointMember = { point_id: number; user_id: string; role: string | null; status: string | null; title?: string | null; profile: ProfileRecord | null; avatarUrl?: string }
 type TrackSchema = NormalizedTrackSchema | Record<string, unknown> | null
-type TrackType = { id: number; name: string | null; status: string | null; form_schema: unknown; track_schema: TrackSchema; vesrion: number | null }
+type TrackType = { id: number; name: string | null; status: string | null; sla: number | null; form_schema: unknown; track_schema: TrackSchema; vesrion: number | null }
 type TrackingRecordRow = {
   id: number
   ref_id: number
@@ -63,6 +64,8 @@ type TrackingRecordRow = {
   name: string | null
   status: string | null
   current_step: string | null
+  sla: number | null
+  sla_mode: string | null
   data: Record<string, unknown> | null
   notes: string | null
   track_type: TrackType | TrackType[] | null
@@ -73,6 +76,8 @@ type TrackRecord = {
   name: string | null
   status: string | null
   currentStepKey: string | null
+  sla: number | null
+  slaMode: string | null
   data: Record<string, unknown> | null
   notes: string | null
   trackType: TrackType | null
@@ -203,7 +208,7 @@ export default function PointPage() {
       const [tracksResult, membersResult, orgPermissionResult, pointPermissionResult, pointResult] = await Promise.all([
         supabase
           .from("tracking_records")
-          .select("id, ref_id, point_id, track_type_id, name, status, current_step, data, notes, track_type:track_types(id, name, status, form_schema, track_schema, vesrion)")
+          .select("id, ref_id, point_id, track_type_id, name, status, current_step, sla, sla_mode, data, notes, track_type:track_types(id, name, status, sla, form_schema, track_schema, vesrion)")
           .eq("point_id", pointIdFromRoute)
           .order("updated_at", { ascending: false }),
         supabase
@@ -278,6 +283,8 @@ export default function PointPage() {
             name: trackRow.name,
             status: trackRow.status,
             currentStepKey: trackRow.current_step,
+            sla: trackRow.sla,
+            slaMode: trackRow.sla_mode,
             data: trackRow.data && typeof trackRow.data === "object" ? (trackRow.data as Record<string, unknown>) : null,
             notes: trackRow.notes,
             trackType: trackType
@@ -611,6 +618,7 @@ export default function PointPage() {
                                       <div>סוג מסלול: {track.trackType?.name?.trim() || `סוג #${track.trackType?.id ?? "—"}`}</div>
                                       <div>מספר ייחוס: {track.refId}</div>
                                       <div>צומת נוכחי: {track.currentNode?.title || track.currentStepKey || "לא הוגדר"}</div>
+                                      <div>SLA: {formatMinutesLabel(track.sla ?? track.trackType?.sla ?? null)} · {track.slaMode === "manual" ? "Manual" : "Derived"}</div>
                                     </CardDescription>
                                   </CardHeader>
                                   <CardContent className="space-y-4">

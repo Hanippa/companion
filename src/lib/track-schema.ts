@@ -8,6 +8,8 @@ export type TrackNode = {
   id: string
   title: string
   description?: string | null
+  sla?: number | null
+  sla_modifier?: number | null
   next_nodes: TrackNodeConnection[]
 }
 
@@ -42,6 +44,8 @@ type RawTrackNode = {
   id?: string | null
   title?: string | null
   description?: string | null
+  sla?: number | null
+  sla_modifier?: number | null
   next_nodes?: RawTrackNodeConnection[] | null
 }
 
@@ -64,6 +68,7 @@ function normalizeConnection(
     | LegacyTrackTransition
     | null
     | undefined
+
   const nodeId =
     connectionCandidate && "node_id" in connectionCandidate
       ? connectionCandidate.node_id
@@ -86,12 +91,16 @@ function normalizeConnection(
   }
 }
 
-function normalizeNode(rawNode: RawTrackNode | LegacyTrackStep, nodeIndex: number): TrackNode | null {
+function normalizeNode(
+  rawNode: RawTrackNode | LegacyTrackStep,
+  nodeIndex: number
+): TrackNode | null {
   const nodeId = rawNode.id?.trim()
   if (!nodeId) {
     return null
   }
 
+  const nodeWithSla = rawNode as RawTrackNode
   const title = rawNode.title?.trim() || `צומת ${nodeIndex + 1}`
   const rawConnections =
     "next_nodes" in rawNode
@@ -104,8 +113,19 @@ function normalizeNode(rawNode: RawTrackNode | LegacyTrackStep, nodeIndex: numbe
     id: nodeId,
     title,
     description: rawNode.description?.trim() || null,
+    sla:
+      typeof nodeWithSla.sla === "number" && Number.isFinite(nodeWithSla.sla)
+        ? nodeWithSla.sla
+        : null,
+    sla_modifier:
+      typeof nodeWithSla.sla_modifier === "number" &&
+      Number.isFinite(nodeWithSla.sla_modifier)
+        ? nodeWithSla.sla_modifier
+        : null,
     next_nodes: rawConnections
-      .map((connection, connectionIndex) => normalizeConnection(connection, connectionIndex))
+      .map((connection, connectionIndex) =>
+        normalizeConnection(connection, connectionIndex)
+      )
       .filter((connection): connection is TrackNodeConnection => Boolean(connection)),
   }
 }
@@ -131,10 +151,14 @@ export function normalizeTrackSchema(rawSchema: unknown): NormalizedTrackSchema 
   }
 
   const nodeIds = new Set(rawNodes.map((node) => node.id))
-  const startNodeIdCandidate = schema.start_node_id?.trim() || schema.initial_step?.trim() || rawNodes[0].id
-  const startNodeId = nodeIds.has(startNodeIdCandidate) ? startNodeIdCandidate : rawNodes[0].id
+  const startNodeIdCandidate =
+    schema.start_node_id?.trim() || schema.initial_step?.trim() || rawNodes[0].id
+  const startNodeId = nodeIds.has(startNodeIdCandidate)
+    ? startNodeIdCandidate
+    : rawNodes[0].id
   const endNodeIdCandidate = schema.end_node_id?.trim() || null
-  const endNodeId = endNodeIdCandidate && nodeIds.has(endNodeIdCandidate) ? endNodeIdCandidate : null
+  const endNodeId =
+    endNodeIdCandidate && nodeIds.has(endNodeIdCandidate) ? endNodeIdCandidate : null
 
   return {
     title: schema.title?.trim() || null,

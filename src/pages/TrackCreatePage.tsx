@@ -52,6 +52,7 @@ type TrackType = {
   id: number
   name: string | null
   status: string | null
+  sla: number | null
   form_schema: FormSchema | null
   track_schema: TrackSchema | null
 }
@@ -224,6 +225,8 @@ export default function TrackCreatePage() {
   const [point, setPoint] = useState<PointRecord | null>(null)
   const [trackTypes, setTrackTypes] = useState<TrackType[]>([])
   const [selectedTrackTypeId, setSelectedTrackTypeId] = useState<string>("")
+  const [slaMode, setSlaMode] = useState<"derived" | "manual">("derived")
+  const [trackSlaMinutes, setTrackSlaMinutes] = useState<string>("0")
   const [formData, setFormData] = useState<Record<string, Record<string, unknown>>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -252,7 +255,7 @@ export default function TrackCreatePage() {
         supabase.from("points").select("id, organization_id, name, notes, status").eq("id", pointIdFromRoute).single<PointRecord>(),
         supabase
           .from("track_types")
-          .select("id, name, status, form_schema, track_schema")
+          .select("id, name, status, sla, form_schema, track_schema")
           .eq("organization_id", organizationIdFromRoute)
           .eq("status", "active")
           .order("name", { ascending: true, nullsFirst: false }),
@@ -285,6 +288,8 @@ export default function TrackCreatePage() {
       setTrackTypes(nextTrackTypes)
       if (nextTrackTypes[0]) {
         setSelectedTrackTypeId(nextTrackTypes[0].id.toString())
+        setSlaMode("derived")
+        setTrackSlaMinutes(String(nextTrackTypes[0].sla ?? 0))
         setFormData(buildInitialFormData(nextTrackTypes[0]))
       }
       setLoading(false)
@@ -298,6 +303,8 @@ export default function TrackCreatePage() {
 
   useEffect(() => {
     setFormData(buildInitialFormData(selectedTrackType))
+    setSlaMode("derived")
+    setTrackSlaMinutes(String(selectedTrackType?.sla ?? 0))
   }, [selectedTrackTypeId])
 
   const organizationOptions = organizations.map((organization) => ({
@@ -351,6 +358,7 @@ export default function TrackCreatePage() {
     const refId = resolveRefId(formData)
     const name = buildTrackName(selectedTrackType, formData)
     const storedData = buildStoredTrackData(selectedTrackType, formData)
+    const resolvedSla = Number.isFinite(Number(trackSlaMinutes)) ? Number(trackSlaMinutes) : 0
 
     setSaving(true)
     setError(null)
@@ -364,6 +372,8 @@ export default function TrackCreatePage() {
         name,
         status: "active",
         current_step: currentStep,
+        sla_mode: slaMode,
+        sla: resolvedSla,
         data: storedData,
       })
       .select("id, name")
@@ -464,6 +474,32 @@ export default function TrackCreatePage() {
                             </div>
                           </div>
                         ) : null}
+                        <div className="space-y-2">
+                          <div className="text-sm font-medium">מצב SLA</div>
+                          <Select value={slaMode} onValueChange={(value: "derived" | "manual") => setSlaMode(value)}>
+                            <SelectTrigger className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="derived">Derived · SLA בסיסי עם modifiers</SelectItem>
+                              <SelectItem value="manual">Manual · SLA ידני ללא modifiers</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="text-sm font-medium">SLA למסלול (דקות)</div>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={trackSlaMinutes}
+                            onChange={(event) => setTrackSlaMinutes(event.target.value)}
+                          />
+                          <div className="text-xs text-muted-foreground">
+                            {slaMode === "derived"
+                              ? "במצב derived המערכת תוסיף modifiers של צמתים למסלול."
+                              : "במצב manual המערכת תתעלם מ־sla_modifier של הצמתים."}
+                          </div>
+                        </div>
                         {error ? (
                           <Alert variant="destructive">
                             <CircleAlert className="size-4" />

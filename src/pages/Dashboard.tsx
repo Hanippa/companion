@@ -6,6 +6,7 @@ import {
   CircleAlert,
   GitBranchPlus,
   MapPinned,
+  Plus,
   Route,
   ShieldUser,
   Users2,
@@ -564,6 +565,21 @@ export default function Dashboard() {
                             סה"כ {points.length} נקודות
                           </Badge>
                         </div>
+                        {canManageTrackTypes ? (
+                          <div className="flex justify-end">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-xl"
+                              onClick={() =>
+                                navigate(`/${getOrganizationSegment(selectedOrganization)}/points/new`)
+                              }
+                            >
+                              <Plus className="size-4" />
+                              יצירת נקודה
+                            </Button>
+                          </div>
+                        ) : null}
                       </CardHeader>
 
                       <CardContent>

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom"
 import {
   Building2,
   CircleAlert,
+  Link2,
   MapPinned,
   Route,
   Rows3,
@@ -30,6 +31,7 @@ import {
 } from "@/components/track-stepper"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
@@ -38,6 +40,7 @@ import { getOrganizationsCached } from "@/lib/organizations"
 import { getProfilesByIdsCached } from "@/lib/profile-cache"
 import { supabase } from "@/lib/supabase"
 import { getTrackCurrentNode, normalizeTrackSchema, type NormalizedTrackSchema, type TrackNode } from "@/lib/track-schema"
+import { calculateTrackSlaSummary, formatMinutesLabel, formatRemainingLabel } from "@/lib/track-sla"
 
 type Organization = {
   id: number
@@ -58,6 +61,7 @@ type TrackType = {
   id: number
   name: string | null
   status: string | null
+  sla: number | null
   form_schema: unknown
   track_schema: NormalizedTrackSchema | Record<string, unknown> | null
   vesrion: number | null
@@ -71,8 +75,12 @@ type TrackingRecordRow = {
   name: string | null
   status: string | null
   current_step: string | null
+  sla: number | null
+  sla_mode: string | null
   data: Record<string, unknown> | null
+  created_at: string | null
   notes: string | null
+  public_tracking_token: string | null
   point: PointRecord | PointRecord[] | null
   track_type: TrackType | TrackType[] | null
 }
@@ -83,8 +91,12 @@ type TrackRecord = {
   name: string | null
   status: string | null
   currentStepKey: string | null
+  sla: number | null
+  slaMode: string | null
   data: Record<string, unknown> | null
+  createdAt: string | null
   notes: string | null
+  publicTrackingToken: string | null
   point: PointRecord | null
   trackType: TrackType | null
   trackSchema: NormalizedTrackSchema | null
@@ -100,6 +112,14 @@ type RawEventRow = {
   created_at: string
 }
 
+type CurrentActor = {
+  user_id: string | null
+  actor_name: string | null
+  actor_avatar_url: string | null
+}
+
+type RealtimeStatus = "CONNECTING" | "SUBSCRIBED" | "TIMED_OUT" | "CLOSED" | "CHANNEL_ERROR"
+
 const normalizeSingleRow = <T,>(value: T | T[] | null): T | null =>
   Array.isArray(value) ? value[0] ?? null : value
 
@@ -110,6 +130,22 @@ const getTrackRecordTitle = (track: TrackRecord | null) => {
 
 const getStatusLabel = (status: string | null | undefined) =>
   status === "active" ? "פעיל" : status?.trim() || "לא פעיל"
+
+const getRealtimeStatusLabel = (status: RealtimeStatus) => {
+  switch (status) {
+    case "SUBSCRIBED":
+      return "עדכון חי פעיל"
+    case "CONNECTING":
+      return "מתחבר לעדכון חי"
+    case "TIMED_OUT":
+      return "עדכון חי מושהה"
+    case "CHANNEL_ERROR":
+      return "שגיאת עדכון חי"
+    case "CLOSED":
+    default:
+      return "עדכון חי לא פעיל"
+  }
+}
 
 export default function TrackPage() {
   const navigate = useNavigate()
@@ -128,6 +164,16 @@ export default function TrackPage() {
   const [loadingTrack, setLoadingTrack] = useState(true)
   const [trackError, setTrackError] = useState<string | null>(null)
   const [pendingTransitionId, setPendingTransitionId] = useState<string | null>(null)
+  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("CONNECTING")
+  const [copiedPublicLink, setCopiedPublicLink] = useState(false)
+  const [slaModeDraft, setSlaModeDraft] = useState<"derived" | "manual">("derived")
+  const [trackSlaDraft, setTrackSlaDraft] = useState("0")
+  const [savingSla, setSavingSla] = useState(false)
+  const [currentActor, setCurrentActor] = useState<CurrentActor>({
+    user_id: null,
+    actor_name: null,
+    actor_avatar_url: null,
+  })
 
   useEffect(() => {
     let isMounted = true
@@ -159,6 +205,39 @@ export default function TrackPage() {
     }
   }, [])
 
+  useEffect(() => {
+    let isMounted = true
+
+    const loadCurrentActor = async () => {
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser()
+
+      if (error) {
+        console.error("Error fetching current user:", error)
+        return
+      }
+
+      if (!user || !isMounted) return
+
+      const profilesById = await getProfilesByIdsCached([user.id])
+      if (!isMounted) return
+
+      setCurrentActor({
+        user_id: user.id,
+        actor_name: profilesById[user.id]?.display_name ?? null,
+        actor_avatar_url: profilesById[user.id]?.avatar_url ?? null,
+      })
+    }
+
+    void loadCurrentActor()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
   const selectedOrganization =
     organizations.find((organization) => organization.id === organizationIdFromRoute) ?? null
 
@@ -174,11 +253,12 @@ export default function TrackPage() {
 
     setLoadingTrack(true)
     setTrackError(null)
+    setPendingTransitionId(null)
 
     const { data: trackData, error: trackQueryError } = await supabase
       .from("tracking_records")
       .select(
-        "id, ref_id, point_id, track_type_id, name, status, current_step, data, notes, point:points(id, organization_id, name, notes, status), track_type:track_types(id, name, status, form_schema, track_schema, vesrion)"
+        "id, ref_id, point_id, track_type_id, name, status, current_step, sla, sla_mode, data, created_at, notes, public_tracking_token, point:points(id, organization_id, name, notes, status), track_type:track_types(id, name, status, sla, form_schema, track_schema, vesrion)"
       )
       .eq("id", trackIdFromRoute)
       .single<TrackingRecordRow>()
@@ -204,8 +284,12 @@ export default function TrackPage() {
       name: trackData.name,
       status: trackData.status,
       currentStepKey: trackData.current_step,
+      sla: trackData.sla,
+      slaMode: trackData.sla_mode,
       data: trackData.data,
+      createdAt: trackData.created_at,
       notes: trackData.notes,
+      publicTrackingToken: trackData.public_tracking_token,
       point,
       trackType,
       trackSchema,
@@ -217,6 +301,24 @@ export default function TrackPage() {
       setEvents([])
       setPointTracks([])
       setTrackError("המסלול הזה אינו משויך לנקודה תקינה.")
+      setLoadingTrack(false)
+      return
+    }
+
+    if (pointIdFromRoute !== null && point.id !== pointIdFromRoute) {
+      setTrack(nextTrack)
+      setEvents([])
+      setPointTracks([])
+      setTrackError("המסלול הזה אינו שייך לנקודה שנבחרה.")
+      setLoadingTrack(false)
+      return
+    }
+
+    if (selectedOrganization && point.organization_id !== selectedOrganization.id) {
+      setTrack(nextTrack)
+      setEvents([])
+      setPointTracks([])
+      setTrackError("המסלול הזה אינו שייך לארגון שנבחר.")
       setLoadingTrack(false)
       return
     }
@@ -266,10 +368,12 @@ export default function TrackPage() {
     }))
 
     setTrack(nextTrack)
+    setSlaModeDraft(trackData.sla_mode === "manual" ? "manual" : "derived")
+    setTrackSlaDraft(String(trackData.sla ?? trackType?.sla ?? 0))
     setEvents(nextEvents)
     setPointTracks(nextPointTracks)
     setLoadingTrack(false)
-  }, [trackIdFromRoute, selectedOrganization?.name])
+  }, [pointIdFromRoute, selectedOrganization, trackIdFromRoute])
 
   useEffect(() => {
     if (loadingOrganizations) return
@@ -280,6 +384,9 @@ export default function TrackPage() {
       return
     }
 
+    setTrack(null)
+    setEvents([])
+    setPointTracks([])
     void loadTrackPage()
   }, [
     loadTrackPage,
@@ -313,6 +420,152 @@ export default function TrackPage() {
     }
   }, [navigate, organizationSlug, pointSlug, selectedOrganization, track, trackSlug])
 
+  useEffect(() => {
+    if (trackIdFromRoute === null) return
+
+    let isActive = true
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    setRealtimeStatus("CONNECTING")
+
+    console.log("[track realtime] effect start", {
+      trackId: trackIdFromRoute,
+    })
+
+    const channelName = `track-page-${trackIdFromRoute}`
+
+    const subscribeToRealtime = async () => {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession()
+
+      console.log("[track realtime] session check", {
+        trackId: trackIdFromRoute,
+        hasSession: Boolean(session),
+        hasAccessToken: Boolean(session?.access_token),
+        sessionError,
+      })
+
+      if (session?.access_token) {
+        await supabase.realtime.setAuth(session.access_token)
+        console.log("[track realtime] realtime auth set", {
+          trackId: trackIdFromRoute,
+        })
+      }
+
+      if (!isActive) return
+
+      console.log("[track realtime] subscribing to channel", {
+        trackId: trackIdFromRoute,
+        channelName,
+      })
+
+      channel = supabase
+        .channel(channelName)
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "tracking_records",
+            filter: `id=eq.${trackIdFromRoute}`,
+          },
+          (payload) => {
+            console.log("[track realtime] tracking_records UPDATE", payload)
+            const nextCurrentStep =
+              typeof payload.new.current_step === "string" ? payload.new.current_step : null
+            const nextStatus =
+              typeof payload.new.status === "string" ? payload.new.status : null
+            const nextNotes =
+              typeof payload.new.notes === "string" ? payload.new.notes : null
+            const nextData =
+              payload.new.data && typeof payload.new.data === "object"
+                ? (payload.new.data as Record<string, unknown>)
+                : null
+
+            setTrack((currentTrack) =>
+              currentTrack && currentTrack.id === trackIdFromRoute
+                ? {
+                    ...currentTrack,
+                    status: nextStatus,
+                    notes: nextNotes,
+                    data: nextData,
+                    currentStepKey: nextCurrentStep,
+                    currentNode: getTrackCurrentNode(currentTrack.trackSchema, nextCurrentStep),
+                    sla:
+                      typeof payload.new.sla === "number" ? payload.new.sla : currentTrack.sla,
+                    slaMode:
+                      typeof payload.new.sla_mode === "string"
+                        ? payload.new.sla_mode
+                        : currentTrack.slaMode,
+                  }
+                : currentTrack
+            )
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "tracking_record_events",
+            filter: `tracking_record_id=eq.${trackIdFromRoute}`,
+          },
+          async (payload) => {
+            console.log("[track realtime] tracking_record_events INSERT", payload)
+            const nextEvent = payload.new as RawEventRow
+            let actor_name: string | null = null
+            let actor_avatar_url: string | null = null
+
+            if (nextEvent.user_id) {
+              const profilesById = await getProfilesByIdsCached([nextEvent.user_id])
+              actor_name = profilesById[nextEvent.user_id]?.display_name ?? null
+              actor_avatar_url = profilesById[nextEvent.user_id]?.avatar_url ?? null
+            }
+
+            setEvents((currentEvents) => {
+              if (currentEvents.some((event) => event.id === nextEvent.id)) {
+                return currentEvents
+              }
+
+              return [
+                ...currentEvents,
+                {
+                  ...nextEvent,
+                  actor_name,
+                  actor_avatar_url,
+                },
+              ].sort(
+                (left, right) =>
+                  new Date(left.created_at).getTime() - new Date(right.created_at).getTime()
+              )
+            })
+          }
+        )
+        .subscribe((status) => {
+          setRealtimeStatus(status as RealtimeStatus)
+          console.log("[track realtime] channel status", {
+            trackId: trackIdFromRoute,
+            status,
+          })
+        })
+    }
+
+    void subscribeToRealtime()
+
+    return () => {
+      console.log("[track realtime] cleanup removing channel", {
+        trackId: trackIdFromRoute,
+        channelName,
+      })
+      isActive = false
+      setRealtimeStatus("CLOSED")
+      if (channel) {
+        void supabase.removeChannel(channel)
+      }
+    }
+  }, [trackIdFromRoute])
+
   const organizationOptions = useMemo(
     () =>
       organizations.map((organization) => ({
@@ -333,27 +586,144 @@ export default function TrackPage() {
   }
 
   const handleTransitionSelect = async (action: TrackNodeAction, sourceNode: TrackNode) => {
-    if (!track) return
+    if (!track || pendingTransitionId) return
 
     setPendingTransitionId(action.id)
+    setTrackError(null)
 
     try {
-      const { error: updateError } = await supabase
+      const { data: updatedRows, error: updateError } = await supabase
         .from("tracking_records")
         .update({
           current_step: action.node_id,
           updated_at: new Date().toISOString(),
         })
         .eq("id", track.id)
+        .select("id, current_step")
 
       if (updateError) {
         throw updateError
       }
 
-      const { error: eventError } = await supabase
+      const updatedRecord = updatedRows?.[0] ?? null
+
+      if (!updatedRecord) {
+        throw new Error("No track record was updated.")
+      }
+
+      const { data: insertedEvents, error: eventError } = await supabase
         .from("tracking_record_events")
         .insert({
           tracking_record_id: track.id,
+          event_type: "step_advance",
+          step_key: action.node_id,
+          payload: {
+            transition_id: action.id,
+            transition_label: action.label,
+            from_node_id: sourceNode.id,
+            to_node_id: action.node_id,
+          },
+        })
+        .select("id, user_id, event_type, step_key, payload, created_at")
+
+      if (eventError) {
+        throw eventError
+      }
+
+      const insertedEvent = insertedEvents?.[0] ?? null
+
+      setTrack((currentTrack) =>
+        currentTrack && currentTrack.id === track.id
+          ? {
+              ...currentTrack,
+              currentStepKey: action.node_id,
+              currentNode:
+                currentTrack.trackSchema?.nodes.find((node) => node.id === action.node_id) ?? null,
+            }
+          : currentTrack
+      )
+
+      if (insertedEvent) {
+        setEvents((currentEvents) => [
+          ...currentEvents,
+          {
+            ...insertedEvent,
+            actor_name: currentActor.actor_name,
+            actor_avatar_url: currentActor.actor_avatar_url,
+          },
+        ])
+      }
+
+      return
+    } catch (error) {
+      console.error("Error advancing track:", error)
+      setTrackError("לא הצלחנו לקדם את המסלול כרגע.")
+      return
+    } finally {
+      setPendingTransitionId(null)
+    }
+    /* if ((track.currentNode?.id || track.currentStepKey) !== sourceNode.id) {
+      setTrackError("המסלול השתנה מאז הטעינה האחרונה. טוענים מחדש את המידע.")
+      await loadTrackPage()
+      return
+    }
+
+    setPendingTransitionId(action.id)
+
+    try {
+      const { data: freshRecords, error: freshRecordError } = await supabase
+        .from("tracking_records")
+        .select("id, current_step")
+        .eq("id", track.id)
+        .limit(1)
+
+      if (freshRecordError) {
+        throw freshRecordError
+      }
+
+      const freshRecord = freshRecords?.[0] ?? null
+
+      if (!freshRecord) {
+        setTrackError("לא הצלחנו למצוא את רשומת המסלול הזו. טוענים מחדש את המידע.")
+        await loadTrackPage()
+        return
+      }
+
+      const effectiveCurrentStep =
+        freshRecord.current_step ?? track.trackSchema?.start_node_id ?? track.currentStepKey ?? null
+
+      if (effectiveCurrentStep !== sourceNode.id) {
+        setTrackError("המסלול השתנה מאז הטעינה האחרונה. טוענים מחדש את המידע.")
+        await loadTrackPage()
+        return
+      }
+
+      const { data: updatedRecords, error: updateError } = await supabase
+        .from("tracking_records")
+        .update({
+          current_step: action.node_id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", track.id)
+        .select("id")
+        .limit(1)
+
+      if (updateError) {
+        throw updateError
+      }
+
+      const updatedRecord = updatedRecords?.[0] ?? null
+
+      if (!updatedRecord) {
+        setTrackError("לא הצלחנו לעדכן את המסלול כרגע. טוענים מחדש את המידע.")
+        await loadTrackPage()
+        return
+      }
+
+      const { error: eventError } = await supabase
+        .from("tracking_record_events")
+        .insert({
+          tracking_record_id: updatedRecord.id,
           event_type: "step_advance",
           step_key: sourceNode.id,
           payload: {
@@ -374,7 +744,7 @@ export default function TrackPage() {
       setTrackError("לא הצלחנו לקדם את המסלול כרגע.")
     } finally {
       setPendingTransitionId(null)
-    }
+    } */
   }
 
   const currentNodeLabel = track?.currentNode?.title || track?.currentStepKey || "לא הוגדר"
@@ -385,6 +755,79 @@ export default function TrackPage() {
     track?.notes?.trim() ||
     track?.trackSchema?.description?.trim() ||
     "המסלול מוצג לפי הצמתים שהרשומה עברה בפועל, יחד עם האירועים ואפשרויות ההמשך מהצומת הנוכחי."
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 30000)
+    return () => window.clearInterval(interval)
+  }, [])
+
+  const slaSummary = useMemo(
+    () =>
+      calculateTrackSlaSummary({
+        schema: track?.trackSchema ?? null,
+        events,
+        createdAt: track?.createdAt ?? null,
+        currentNodeId: track?.currentNode?.id ?? track?.currentStepKey ?? null,
+        baseSlaMinutes: track?.sla ?? track?.trackType?.sla ?? null,
+        slaMode: track?.slaMode,
+        now,
+      }),
+    [events, now, track]
+  )
+
+  const publicTrackUrl =
+    track?.publicTrackingToken && typeof window !== "undefined"
+      ? `${window.location.origin}/tracking/${track.publicTrackingToken}`
+      : null
+
+  const handleCopyPublicTrackLink = async () => {
+    if (!publicTrackUrl || !navigator.clipboard) return
+
+    try {
+      await navigator.clipboard.writeText(publicTrackUrl)
+      setCopiedPublicLink(true)
+      window.setTimeout(() => setCopiedPublicLink(false), 2000)
+    } catch (error) {
+      console.error("Error copying public track link:", error)
+    }
+  }
+
+  const handleSaveSla = async () => {
+    if (!track) return
+
+    setSavingSla(true)
+    setTrackError(null)
+
+    try {
+      const resolvedSla = Number.isFinite(Number(trackSlaDraft)) ? Number(trackSlaDraft) : 0
+      const { error } = await supabase
+        .from("tracking_records")
+        .update({
+          sla: resolvedSla,
+          sla_mode: slaModeDraft,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", track.id)
+
+      if (error) throw error
+
+      setTrack((currentTrack) =>
+        currentTrack
+          ? {
+              ...currentTrack,
+              sla: resolvedSla,
+              slaMode: slaModeDraft,
+            }
+          : currentTrack
+      )
+    } catch (error) {
+      console.error("Error updating track SLA:", error)
+      setTrackError("לא הצלחנו לעדכן את הגדרות ה־SLA כרגע.")
+    } finally {
+      setSavingSla(false)
+    }
+  }
 
   return (
     <SidebarProvider
@@ -429,38 +872,35 @@ export default function TrackPage() {
 
             {loadingTrack ? (
               <PageMainLayout>
+                <PageMainRail>
+                  <Skeleton className="h-[32rem] rounded-3xl" />
+                </PageMainRail>
                 <PageMainContent>
                   <Skeleton className="h-32 rounded-3xl" />
                   <Skeleton className="h-96 rounded-3xl" />
                 </PageMainContent>
-                <PageMainRail>
-                  <Skeleton className="h-[32rem] rounded-3xl" />
-                </PageMainRail>
               </PageMainLayout>
             ) : track ? (
               <PageMainLayout>
-                <PageMainContent>
+                <PageMainContent className="xl:order-2">
                   <Card className="border-border/70 shadow-none">
-                    <CardHeader className="gap-4">
-                      <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div className="space-y-2">
-                          <CardTitle className="text-3xl tracking-tight">
-                            {getTrackRecordTitle(track)}
-                          </CardTitle>
-                          <CardDescription className="max-w-3xl leading-7">
-                            {trackDescription}
-                          </CardDescription>
-                        </div>
-                        <Badge variant="outline" className="rounded-full px-3 py-1">
-                          {getStatusLabel(track.status)}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                  </Card>
-
-                  <Card className="border-border/70 shadow-none">
-                    <CardHeader className="gap-2">
+                    <CardHeader className="gap-2 [&>h3]:hidden">
                       <CardTitle className="text-xl">מהלך המסלול</CardTitle>
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background px-3 py-1 text-xs font-medium">
+                          <span
+                            className={[
+                              "size-2 rounded-full",
+                              realtimeStatus === "SUBSCRIBED"
+                                ? "bg-red-500 shadow-[0_0_0_4px_rgba(239,68,68,0.12)]"
+                                : realtimeStatus === "CONNECTING"
+                                  ? "bg-amber-500"
+                                  : "bg-muted-foreground/40",
+                            ].join(" ")}
+                          />
+                          <span>{getRealtimeStatusLabel(realtimeStatus)}</span>
+                        </div>
+                      </div>
                       <CardDescription>
                         כל צומת מציג את האירועים שקרו בו בפועל, ואת אפשרויות ההמשך הזמינות מהצומת הנוכחי.
                       </CardDescription>
@@ -472,13 +912,16 @@ export default function TrackPage() {
                         currentNodeId={track.currentNode?.id || track.currentStepKey}
                         events={events}
                         pendingTransitionId={pendingTransitionId}
+                        createdAt={track.createdAt}
+                        slaMode={track.slaMode}
+                        baseSlaMinutes={track.sla ?? track.trackType?.sla ?? null}
                         onTransitionSelect={handleTransitionSelect}
                       />
                     </CardContent>
                   </Card>
                 </PageMainContent>
 
-                <PageMainRail>
+                <PageMainRail className="xl:order-1">
                 <InfoPanel>
                   <InfoPanelHeader
                     icon={Route}
@@ -491,12 +934,67 @@ export default function TrackPage() {
                     }
                   />
                   <InfoPanelBody>
+                    <InfoPanelSection icon={Route} title="פרטי מסלול">
+                      <InfoPanelDetailList>
+                        <InfoPanelDetail
+                          label="תיאור"
+                          value={trackDescription}
+                        />
+                        <InfoPanelDetail
+                          label="סוג מסלול"
+                          value={track.trackType?.name?.trim() || "—"}
+                        />
+                      </InfoPanelDetailList>
+                    </InfoPanelSection>
+
+                    <InfoPanelSection
+                      title="קישור ציבורי"
+                      description="שיתוף קישור מעקב ללקוח ללא כניסה למערכת."
+                      action={
+                        publicTrackUrl ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="rounded-xl"
+                            onClick={handleCopyPublicTrackLink}
+                          >
+                            <Link2 className="size-4" />
+                            {copiedPublicLink ? "הקישור הועתק" : "העתקת קישור"}
+                          </Button>
+                        ) : null
+                      }
+                    >
+                      <InfoPanelDetailList>
+                        <InfoPanelDetail
+                          label="קישור"
+                          value={
+                            publicTrackUrl ? (
+                              <span className="break-all text-left">{publicTrackUrl}</span>
+                            ) : (
+                              "לא נוצר עדיין טוקן ציבורי למסלול הזה."
+                            )
+                          }
+                        />
+                      </InfoPanelDetailList>
+                    </InfoPanelSection>
+
                     <InfoPanelStats>
                       <InfoPanelStat
                         icon={TimerReset}
                         label="צומת נוכחי"
                         value={currentNodeLabel}
                         description="זהו הצומת הפעיל שממנו אפשר להמשיך."
+                      />
+                      <InfoPanelStat
+                        icon={TimerReset}
+                        label="SLA למסלול"
+                        value={formatMinutesLabel(slaSummary.effectiveTrackSlaMinutes)}
+                        description={
+                          slaSummary.trackRemainingMs !== null
+                            ? formatRemainingLabel(slaSummary.trackRemainingMs)
+                            : "טרם הוגדר SLA למסלול"
+                        }
                       />
                       <InfoPanelStat
                         icon={Rows3}
@@ -515,6 +1013,59 @@ export default function TrackPage() {
                         <InfoPanelDetail label="סטטוס" value={getStatusLabel(track.point?.status)} />
                         <InfoPanelDetail label="תיאור" value={pointDescription} />
                       </InfoPanelDetailList>
+                    </InfoPanelSection>
+
+                    <InfoPanelSection icon={TimerReset} title="ניהול SLA">
+                      <InfoPanelDetailList>
+                        <InfoPanelDetail
+                          label="מצב חישוב"
+                          value={track.slaMode === "manual" ? "Manual" : "Derived"}
+                        />
+                        <InfoPanelDetail
+                          label="SLA בסיסי"
+                          value={formatMinutesLabel(track.sla ?? track.trackType?.sla ?? null)}
+                        />
+                        <InfoPanelDetail
+                          label="Modifiers שנצברו"
+                          value={formatMinutesLabel(slaSummary.modifierMinutes)}
+                        />
+                        <InfoPanelDetail
+                          label="SLA לצומת נוכחי"
+                          value={
+                            slaSummary.currentNodeRemainingMs !== null
+                              ? formatRemainingLabel(slaSummary.currentNodeRemainingMs)
+                              : formatMinutesLabel(slaSummary.currentNodeSlaMinutes)
+                          }
+                        />
+                      </InfoPanelDetailList>
+                      <div className="mt-4 grid gap-3">
+                        <select
+                          className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+                          value={slaModeDraft}
+                          onChange={(event) =>
+                            setSlaModeDraft(event.target.value as "derived" | "manual")
+                          }
+                        >
+                          <option value="derived">Derived · עם modifiers</option>
+                          <option value="manual">Manual · ללא modifiers</option>
+                        </select>
+                        <input
+                          className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+                          type="number"
+                          min="0"
+                          value={trackSlaDraft}
+                          onChange={(event) => setTrackSlaDraft(event.target.value)}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="rounded-xl"
+                          onClick={handleSaveSla}
+                          disabled={savingSla}
+                        >
+                          {savingSla ? "שומר..." : "שמירת SLA"}
+                        </Button>
+                      </div>
                     </InfoPanelSection>
 
                     <InfoPanelSection icon={Building2} title="הקשר ארגוני">

@@ -8,6 +8,7 @@ import PointEditPage from "./pages/PointEditPage";
 import PointTeamPage from "./pages/PointTeamPage";
 import TrackCreatePage from "./pages/TrackCreatePage";
 import TrackPage from "./pages/TrackPage";
+import PublicTrackPage from "./pages/PublicTrackPage";
 import TrackTypesPage from "./pages/TrackTypesPage";
 import OrganizationTeamPage from "./pages/OrganizationTeamPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -39,6 +40,7 @@ function App() {
       <Route path="/login" element={
         !session ? 
         <LoginPage /> : <Navigate to="/dashboard" replace/>} />
+      <Route path="/tracking/:trackSlug" element={<PublicTrackPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<Dashboard />} />
@@ -49,6 +51,7 @@ function App() {
         <Route path="/:organizationSlug" element={<Dashboard />} />
         <Route path="/:organizationSlug/team" element={<OrganizationTeamPage />} />
         <Route path="/:organizationSlug/track-types" element={<TrackTypesPage />} />
+        <Route path="/:organizationSlug/points/new" element={<PointEditPage />} />
         <Route path="/:organizationSlug/:pointSlug/team" element={<PointTeamPage />} />
         <Route path="/:organizationSlug/:pointSlug/edit" element={<PointEditPage />} />
         <Route path="/:organizationSlug/:pointSlug/track/new" element={<TrackCreatePage />} />

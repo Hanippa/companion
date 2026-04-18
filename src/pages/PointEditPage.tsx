@@ -1,28 +1,30 @@
-import { useEffect, useState, type CSSProperties } from "react"
+import { useEffect, useMemo, useState, type CSSProperties } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { CircleAlert, PencilLine, SaveIcon } from "lucide-react"
+import { CircleAlert, MapPinned, PencilLine, Plus, SaveIcon } from "lucide-react"
 
 import { AppSidebar } from "@/components/app-sidebar"
+import {
+  InfoPanel,
+  InfoPanelBody,
+  InfoPanelDetail,
+  InfoPanelDetailList,
+  InfoPanelHeader,
+  InfoPanelSection,
+  InfoPanelStat,
+  InfoPanelStats,
+} from "@/components/info-panel"
+import { PageBody, PageMainContent, PageMainLayout, PageMainRail } from "@/components/page-main-layout"
 import { SiteHeader } from "@/components/site-header"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { useAuth } from "@/contexts/AuthContext"
-import {
-  getOrganizationSegment,
-  getPointSegment,
-  getRecordIdFromSegment,
-} from "@/lib/drilldown"
+import { getOrganizationSegment, getPointSegment, getRecordIdFromSegment } from "@/lib/drilldown"
+import { getOrganizationsCached } from "@/lib/organizations"
 import { supabase } from "@/lib/supabase"
 
 type Organization = {
@@ -40,12 +42,16 @@ type Point = {
   status: string | null
 }
 
+const getStatusLabel = (status: string | null | undefined) =>
+  status === "active" ? "פעילה" : status?.trim() || "לא פעילה"
+
 export default function PointEditPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const { organizationSlug, pointSlug } = useParams()
   const organizationIdFromRoute = getRecordIdFromSegment(organizationSlug)
   const pointIdFromRoute = getRecordIdFromSegment(pointSlug)
+  const isCreateMode = pointSlug === undefined
 
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [loadingOrganizations, setLoadingOrganizations] = useState(true)
@@ -68,25 +74,20 @@ export default function PointEditPage() {
       setLoadingOrganizations(true)
       setOrganizationsError(null)
 
-      const { data, error } = await supabase
-        .from("organizations")
-        .select("id, name, notes, status")
-        .order("name", { ascending: true, nullsFirst: false })
-
-      if (!isMounted) {
-        return
-      }
-
-      if (error) {
+      try {
+        const data = await getOrganizationsCached()
+        if (!isMounted) return
+        setOrganizations(data)
+      } catch (error) {
+        if (!isMounted) return
         console.error("Error fetching organizations:", error)
         setOrganizations([])
-        setOrganizationsError("We couldn't load your organizations right now.")
-        setLoadingOrganizations(false)
-        return
+        setOrganizationsError("לא הצלחנו לטעון את הארגונים שלך כרגע.")
+      } finally {
+        if (isMounted) {
+          setLoadingOrganizations(false)
+        }
       }
-
-      setOrganizations(data ?? [])
-      setLoadingOrganizations(false)
     }
 
     if (user) {
@@ -108,7 +109,7 @@ export default function PointEditPage() {
     let isMounted = true
 
     const fetchPointAndPermissions = async () => {
-      if (!selectedOrganization || pointIdFromRoute === null) {
+      if (!selectedOrganization) {
         setLoadingPoint(false)
         setLoadingPermissions(false)
         return
@@ -120,19 +121,24 @@ export default function PointEditPage() {
       setSaveMessage(null)
       setSaveError(null)
 
-      const [pointResult, permissionResult] = await Promise.all([
-        supabase
-          .from("points")
-          .select("id, organization_id, name, notes, status")
-          .eq("id", pointIdFromRoute)
-          .single(),
-        supabase
-          .from("organization_users")
-          .select("role")
-          .eq("organization_id", selectedOrganization.id)
-          .eq("user_id", user?.id ?? "")
-          .eq("status", "active")
-          .in("role", ["admin", "owner"]),
+      const permissionQuery = supabase
+        .from("organization_users")
+        .select("role")
+        .eq("organization_id", selectedOrganization.id)
+        .eq("user_id", user?.id ?? "")
+        .eq("status", "active")
+
+      const [permissionResult, pointResult] = await Promise.all([
+        isCreateMode
+          ? permissionQuery.eq("role", "owner")
+          : permissionQuery.in("role", ["admin", "owner"]),
+        isCreateMode
+          ? Promise.resolve({ data: null, error: null })
+          : supabase
+              .from("points")
+              .select("id, organization_id, name, notes, status")
+              .eq("id", pointIdFromRoute ?? -1)
+              .single<Point>(),
       ])
 
       if (!isMounted) {
@@ -140,17 +146,25 @@ export default function PointEditPage() {
       }
 
       if (permissionResult.error) {
-        console.error("Error fetching edit permissions:", permissionResult.error)
+        console.error("Error fetching point permissions:", permissionResult.error)
         setCanEdit(false)
       } else {
         setCanEdit((permissionResult.data ?? []).length > 0)
       }
       setLoadingPermissions(false)
 
+      if (isCreateMode) {
+        setPoint(null)
+        setPointName("")
+        setPointNotes("")
+        setLoadingPoint(false)
+        return
+      }
+
       if (pointResult.error || !pointResult.data) {
         console.error("Error fetching point:", pointResult.error)
         setPoint(null)
-        setPointError("We couldn't load this point right now.")
+        setPointError("לא הצלחנו לטעון את הנקודה הזו כרגע.")
         setLoadingPoint(false)
         return
       }
@@ -187,6 +201,7 @@ export default function PointEditPage() {
       isMounted = false
     }
   }, [
+    isCreateMode,
     navigate,
     organizationSlug,
     pointIdFromRoute,
@@ -197,7 +212,7 @@ export default function PointEditPage() {
 
   const organizationOptions = organizations.map((organization) => ({
     id: organization.id,
-    label: organization.name?.trim() || `Organization #${organization.id}`,
+    label: organization.name?.trim() || `ארגון #${organization.id}`,
   }))
 
   const handleOrganizationChange = (value: string) => {
@@ -212,8 +227,21 @@ export default function PointEditPage() {
     navigate(`/${getOrganizationSegment(nextOrganization)}`)
   }
 
+  const pageTitle = isCreateMode ? "יצירת נקודה" : "עריכת נקודה"
+  const pageDescription = isCreateMode
+    ? "בעל הארגון יכול להקים נקודה חדשה בארגון, ולהגדיר לה שם ותיאור."
+    : "עריכת פרטי הנקודה נשארת בעמוד ייעודי כדי לשמור על עמוד הנקודה עצמו נקי וקריא."
+
+  const permissionDescription = useMemo(() => {
+    if (isCreateMode) {
+      return "יצירת נקודה חדשה זמינה לבעלי הארגון בלבד."
+    }
+
+    return "עריכת נקודה זמינה לבעלי הארגון ולמנהלי הארגון."
+  }, [isCreateMode])
+
   const handlePointSave = async () => {
-    if (!point || !canEdit) {
+    if (!selectedOrganization || !canEdit) {
       return
     }
 
@@ -224,42 +252,80 @@ export default function PointEditPage() {
     const nextName = pointName.trim() || null
     const nextNotes = pointNotes.trim() || null
 
-    const { error } = await supabase
-      .from("points")
-      .update({
+    try {
+      if (isCreateMode) {
+        const { data, error } = await supabase
+          .from("points")
+          .insert({
+            organization_id: selectedOrganization.id,
+            name: nextName,
+            notes: nextNotes,
+            status: "active",
+          })
+          .select("id, organization_id, name, notes, status")
+          .single<Point>()
+
+        if (error || !data) {
+          throw error ?? new Error("create-point-failed")
+        }
+
+        setSaveMessage("הנקודה נוצרה בהצלחה.")
+        navigate(
+          `/${getOrganizationSegment(selectedOrganization)}/${getPointSegment(data)}`,
+          { replace: true }
+        )
+        return
+      }
+
+      if (!point) {
+        throw new Error("missing-point")
+      }
+
+      const { error } = await supabase
+        .from("points")
+        .update({
+          name: nextName,
+          notes: nextNotes,
+        })
+        .eq("id", point.id)
+
+      if (error) {
+        throw error
+      }
+
+      const nextPoint = {
+        ...point,
         name: nextName,
         notes: nextNotes,
-      })
-      .eq("id", point.id)
+      }
 
-    if (error) {
-      console.error("Error saving point:", error)
-      setSaveError("We couldn't save this point right now.")
-      setSavingPoint(false)
-      return
-    }
+      setPoint(nextPoint)
+      setSaveMessage("פרטי הנקודה עודכנו.")
 
-    const nextPoint = {
-      ...point,
-      name: nextName,
-      notes: nextNotes,
-    }
-
-    setPoint(nextPoint)
-    setSaveMessage("Point details updated.")
-    setSavingPoint(false)
-
-    if (selectedOrganization) {
       navigate(
         `/${getOrganizationSegment(selectedOrganization)}/${getPointSegment(nextPoint)}/edit`,
         { replace: true }
       )
+    } catch (error) {
+      console.error("Error saving point:", error)
+      setSaveError(
+        isCreateMode
+          ? "לא הצלחנו ליצור את הנקודה כרגע."
+          : "לא הצלחנו לשמור את פרטי הנקודה כרגע."
+      )
+    } finally {
+      setSavingPoint(false)
     }
   }
 
-  const handleBackToPoint = () => {
-    if (!selectedOrganization || !point) {
+  const handleBack = () => {
+    if (!selectedOrganization) {
       navigate("/dashboard")
+      return
+    }
+
+    if (isCreateMode || !point) {
+      navigate(`/${getOrganizationSegment(selectedOrganization)}`)
       return
     }
 
@@ -276,115 +342,160 @@ export default function PointEditPage() {
       }
     >
       <AppSidebar side="right" variant="inset" />
-      <SidebarInset>
+      <SidebarInset dir="rtl">
         <SiteHeader
-          title="עריכת נקודה"
+          title={pageTitle}
           organizations={organizationOptions}
           selectedOrganizationId={selectedOrganization?.id.toString()}
           onOrganizationChange={handleOrganizationChange}
         />
-        <div className="flex flex-1 flex-col">
-          <div className="@container/main flex flex-1 flex-col gap-2">
-            <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 py-4 md:gap-6 md:py-6">
-              <div className="px-4 lg:px-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <PencilLine className="size-5" />
-                      Edit point
-                    </CardTitle>
-                    <CardDescription>
-                      Update point details in a dedicated admin page.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-5">
-                    {loadingOrganizations || loadingPoint ? (
-                      <div className="space-y-3">
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-32 w-full" />
+        <PageBody>
+          <div className="page-stack flex-1">
+            {loadingOrganizations || loadingPoint ? (
+              <PageMainLayout>
+                <PageMainContent>
+                  <Skeleton className="h-[28rem] rounded-3xl" />
+                </PageMainContent>
+                <PageMainRail>
+                  <Skeleton className="h-[28rem] rounded-3xl" />
+                </PageMainRail>
+              </PageMainLayout>
+            ) : organizationsError || pointError ? (
+              <Alert variant="destructive">
+                <CircleAlert className="size-4" />
+                <AlertTitle>העמוד אינו זמין</AlertTitle>
+                <AlertDescription>
+                  {pointError || organizationsError || "לא הצלחנו לטעון את העמוד הזה."}
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <PageMainLayout>
+                <PageMainContent>
+                  <Card className="border-border/70 shadow-none">
+                    <CardHeader className="gap-3">
+                      <CardTitle className="flex items-center gap-2 text-xl">
+                        {isCreateMode ? <Plus className="size-5" /> : <PencilLine className="size-5" />}
+                        {pageTitle}
+                      </CardTitle>
+                      <CardDescription>{pageDescription}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-5">
+                      {!canEdit && !loadingPermissions ? (
+                        <Alert variant="destructive">
+                          <AlertTitle>אין הרשאה</AlertTitle>
+                          <AlertDescription>{permissionDescription}</AlertDescription>
+                        </Alert>
+                      ) : null}
+
+                      {saveError ? (
+                        <Alert variant="destructive">
+                          <AlertTitle>{isCreateMode ? "הנקודה לא נוצרה" : "הנקודה לא נשמרה"}</AlertTitle>
+                          <AlertDescription>{saveError}</AlertDescription>
+                        </Alert>
+                      ) : null}
+
+                      {saveMessage ? (
+                        <Alert>
+                          <AlertTitle>{isCreateMode ? "הנקודה נוצרה" : "הנקודה עודכנה"}</AlertTitle>
+                          <AlertDescription>{saveMessage}</AlertDescription>
+                        </Alert>
+                      ) : null}
+
+                      <div className="space-y-2">
+                        <label htmlFor="point-name" className="text-sm font-medium">
+                          שם הנקודה
+                        </label>
+                        <Input
+                          id="point-name"
+                          value={pointName}
+                          onChange={(event) => setPointName(event.target.value)}
+                          disabled={loadingPermissions || !canEdit}
+                          placeholder="למשל: מרכז שירות דיזנגוף"
+                        />
                       </div>
-                    ) : organizationsError || pointError ? (
-                      <Alert variant="destructive">
-                        <CircleAlert className="size-4" />
-                        <AlertTitle>Point unavailable</AlertTitle>
-                        <AlertDescription>
-                          {pointError || organizationsError || "We couldn't load this page."}
-                        </AlertDescription>
-                      </Alert>
-                    ) : !canEdit && !loadingPermissions ? (
-                      <Alert variant="destructive">
-                        <CircleAlert className="size-4" />
-                        <AlertTitle>No edit access</AlertTitle>
-                        <AlertDescription>
-                          Only organization owners and admins can edit this point.
-                        </AlertDescription>
-                      </Alert>
-                    ) : (
-                      <>
-                        {saveError ? (
-                          <Alert variant="destructive">
-                            <AlertTitle>Point not saved</AlertTitle>
-                            <AlertDescription>{saveError}</AlertDescription>
-                          </Alert>
-                        ) : null}
-                        {saveMessage ? (
-                          <Alert>
-                            <AlertTitle>Point updated</AlertTitle>
-                            <AlertDescription>{saveMessage}</AlertDescription>
-                          </Alert>
-                        ) : null}
 
-                        <div className="space-y-2">
-                          <label htmlFor="point-name" className="text-sm font-medium">
-                            Point name
-                          </label>
-                          <Input
-                            id="point-name"
-                            value={pointName}
-                            onChange={(event) => setPointName(event.target.value)}
-                            disabled={loadingPermissions || !canEdit}
+                      <div className="space-y-2">
+                        <label htmlFor="point-notes" className="text-sm font-medium">
+                          תיאור / הערות
+                        </label>
+                        <textarea
+                          id="point-notes"
+                          value={pointNotes}
+                          onChange={(event) => setPointNotes(event.target.value)}
+                          disabled={loadingPermissions || !canEdit}
+                          className="min-h-40 w-full rounded-3xl border border-input bg-input/30 px-4 py-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
+                          placeholder="מה חשוב לדעת על הנקודה הזו?"
+                        />
+                      </div>
+
+                      <div className="flex flex-wrap justify-end gap-3">
+                        <Button variant="outline" onClick={handleBack} className="rounded-xl">
+                          חזרה
+                        </Button>
+                        <Button
+                          onClick={handlePointSave}
+                          disabled={savingPoint || !canEdit}
+                          className="rounded-xl"
+                        >
+                          <SaveIcon className="size-4" />
+                          {savingPoint
+                            ? isCreateMode
+                              ? "יוצר נקודה..."
+                              : "שומר..."
+                            : isCreateMode
+                              ? "יצירת נקודה"
+                              : "שמירת נקודה"}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </PageMainContent>
+
+                <PageMainRail>
+                  <InfoPanel>
+                    <InfoPanelHeader
+                      icon={MapPinned}
+                      title={pointName.trim() || (isCreateMode ? "נקודה חדשה" : `נקודה #${point?.id ?? "—"}`)}
+                      description={pointNotes.trim() || pageDescription}
+                      badge={
+                        <Badge variant={canEdit ? "default" : "outline"}>
+                          {isCreateMode ? "יצירה" : getStatusLabel(point?.status)}
+                        </Badge>
+                      }
+                    />
+                    <InfoPanelBody>
+                      <InfoPanelStats>
+                        <InfoPanelStat
+                          label="ארגון"
+                          value={selectedOrganization?.name?.trim() || `ארגון #${selectedOrganization?.id ?? "—"}`}
+                          description="הנקודה תיווצר בתוך הארגון הפעיל שנבחר כעת."
+                        />
+                        <InfoPanelStat
+                          label="גישה"
+                          value={canEdit ? "מורשה" : "ללא הרשאה"}
+                          description={permissionDescription}
+                        />
+                      </InfoPanelStats>
+
+                      <InfoPanelSection title="מה יישמר?">
+                        <InfoPanelDetailList>
+                          <InfoPanelDetail label="שם נקודה" value={pointName.trim() || "טרם הוזן"} />
+                          <InfoPanelDetail
+                            label="תיאור"
+                            value={pointNotes.trim() || "טרם הוזן"}
                           />
-                        </div>
-
-                        <div className="space-y-2">
-                          <label htmlFor="point-notes" className="text-sm font-medium">
-                            Notes
-                          </label>
-                          <textarea
-                            id="point-notes"
-                            value={pointNotes}
-                            onChange={(event) => setPointNotes(event.target.value)}
-                            disabled={loadingPermissions || !canEdit}
-                            className="min-h-40 w-full rounded-3xl border border-input bg-input/30 px-4 py-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
-                          />
-                        </div>
-
-                        <div className="flex flex-wrap justify-end gap-3">
-                          <Button variant="outline" onClick={handleBackToPoint}>
-                            Back to point
-                          </Button>
-                          <Button onClick={handlePointSave} disabled={savingPoint || !canEdit}>
-                            <SaveIcon className="size-4" />
-                            {savingPoint ? "Saving..." : "Save point"}
-                          </Button>
-                        </div>
-
-                        {point ? (
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="outline">Point ID {point.id}</Badge>
-                            <Badge variant="outline" className="uppercase">
-                              {point.status || "active"}
-                            </Badge>
-                          </div>
-                        ) : null}
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
+                          {!isCreateMode && point ? (
+                            <InfoPanelDetail label="מזהה נקודה" value={point.id} />
+                          ) : null}
+                        </InfoPanelDetailList>
+                      </InfoPanelSection>
+                    </InfoPanelBody>
+                  </InfoPanel>
+                </PageMainRail>
+              </PageMainLayout>
+            )}
           </div>
-        </div>
+        </PageBody>
       </SidebarInset>
     </SidebarProvider>
   )
