@@ -35,11 +35,16 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { useAuth } from "@/contexts/AuthContext"
 import { getOrganizationSegment, getPointSegment, getRecordIdFromSegment, getTrackSegment } from "@/lib/drilldown"
 import { getOrganizationsCached } from "@/lib/organizations"
 import { getProfilesByIdsCached } from "@/lib/profile-cache"
 import { supabase } from "@/lib/supabase"
 import { getTrackCurrentNode, normalizeTrackSchema, type NormalizedTrackSchema, type TrackNode } from "@/lib/track-schema"
+import {
+  buildTrackingRecordSearchText,
+  upsertTrackingRecordSearch,
+} from "@/lib/tracking-record-search"
 import { calculateTrackSlaSummary, formatMinutesLabel, formatRemainingLabel } from "@/lib/track-sla"
 
 type Organization = {
@@ -148,6 +153,7 @@ const getRealtimeStatusLabel = (status: RealtimeStatus) => {
 }
 
 export default function TrackPage() {
+  const { user } = useAuth()
   const navigate = useNavigate()
   const { organizationSlug, pointSlug, trackSlug } = useParams()
   const organizationIdFromRoute = getRecordIdFromSegment(organizationSlug)
@@ -169,6 +175,7 @@ export default function TrackPage() {
   const [slaModeDraft, setSlaModeDraft] = useState<"derived" | "manual">("derived")
   const [trackSlaDraft, setTrackSlaDraft] = useState("0")
   const [savingSla, setSavingSla] = useState(false)
+  const [canManageSla, setCanManageSla] = useState(false)
   const [currentActor, setCurrentActor] = useState<CurrentActor>({
     user_id: null,
     actor_name: null,
@@ -546,6 +553,56 @@ export default function TrackPage() {
     }
   }, [trackIdFromRoute])
 
+  useEffect(() => {
+    let isMounted = true
+
+    const loadSlaPermissions = async () => {
+      if (!selectedOrganization || !track?.point || !user?.id) {
+        setCanManageSla(false)
+        return
+      }
+
+      const [orgPermissionResult, pointPermissionResult] = await Promise.all([
+        supabase
+          .from("organization_users")
+          .select("role")
+          .eq("organization_id", selectedOrganization.id)
+          .eq("user_id", user.id)
+          .eq("status", "active")
+          .in("role", ["admin", "owner"]),
+        supabase
+          .from("point_users")
+          .select("role")
+          .eq("point_id", track.point.id)
+          .eq("user_id", user.id)
+          .eq("status", "active")
+          .eq("role", "admin"),
+      ])
+
+      if (!isMounted) return
+
+      if (orgPermissionResult.error || pointPermissionResult.error) {
+        console.error("Error loading track SLA permissions:", {
+          orgPermissionError: orgPermissionResult.error,
+          pointPermissionError: pointPermissionResult.error,
+        })
+        setCanManageSla(false)
+        return
+      }
+
+      setCanManageSla(
+        (orgPermissionResult.data ?? []).length > 0 ||
+          (pointPermissionResult.data ?? []).length > 0
+      )
+    }
+
+    void loadSlaPermissions()
+
+    return () => {
+      isMounted = false
+    }
+  }, [selectedOrganization, track?.point, user?.id])
+
   const organizationOptions = useMemo(
     () =>
       organizations.map((organization) => ({
@@ -643,6 +700,37 @@ export default function TrackPage() {
         ])
       }
 
+      try {
+        const resolvedStepKey =
+          typeof updatedRecord.current_step === "string"
+            ? updatedRecord.current_step
+            : action.node_id
+        const currentNodeTitle =
+          track.trackSchema?.nodes.find((node) => node.id === resolvedStepKey)?.title ??
+          resolvedStepKey
+
+        if (selectedOrganization) {
+          await upsertTrackingRecordSearch({
+            trackingRecordId: track.id,
+            organizationId: selectedOrganization.id,
+            pointId: track.point?.id ?? null,
+            searchText: buildTrackingRecordSearchText({
+              trackName: track.name,
+              refId: track.refId,
+              status: track.status,
+              notes: track.notes,
+              pointName: track.point?.name,
+              trackTypeName: track.trackType?.name,
+              currentStepKey: resolvedStepKey,
+              currentNodeTitle,
+              data: track.data,
+            }),
+          })
+        }
+      } catch (searchError) {
+        console.error("Error updating tracking record search index:", searchError)
+      }
+
       return
     } catch (error) {
       console.error("Error advancing track:", error)
@@ -651,89 +739,6 @@ export default function TrackPage() {
     } finally {
       setPendingTransitionId(null)
     }
-    /* if ((track.currentNode?.id || track.currentStepKey) !== sourceNode.id) {
-      setTrackError("המסלול השתנה מאז הטעינה האחרונה. טוענים מחדש את המידע.")
-      await loadTrackPage()
-      return
-    }
-
-    setPendingTransitionId(action.id)
-
-    try {
-      const { data: freshRecords, error: freshRecordError } = await supabase
-        .from("tracking_records")
-        .select("id, current_step")
-        .eq("id", track.id)
-        .limit(1)
-
-      if (freshRecordError) {
-        throw freshRecordError
-      }
-
-      const freshRecord = freshRecords?.[0] ?? null
-
-      if (!freshRecord) {
-        setTrackError("לא הצלחנו למצוא את רשומת המסלול הזו. טוענים מחדש את המידע.")
-        await loadTrackPage()
-        return
-      }
-
-      const effectiveCurrentStep =
-        freshRecord.current_step ?? track.trackSchema?.start_node_id ?? track.currentStepKey ?? null
-
-      if (effectiveCurrentStep !== sourceNode.id) {
-        setTrackError("המסלול השתנה מאז הטעינה האחרונה. טוענים מחדש את המידע.")
-        await loadTrackPage()
-        return
-      }
-
-      const { data: updatedRecords, error: updateError } = await supabase
-        .from("tracking_records")
-        .update({
-          current_step: action.node_id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", track.id)
-        .select("id")
-        .limit(1)
-
-      if (updateError) {
-        throw updateError
-      }
-
-      const updatedRecord = updatedRecords?.[0] ?? null
-
-      if (!updatedRecord) {
-        setTrackError("לא הצלחנו לעדכן את המסלול כרגע. טוענים מחדש את המידע.")
-        await loadTrackPage()
-        return
-      }
-
-      const { error: eventError } = await supabase
-        .from("tracking_record_events")
-        .insert({
-          tracking_record_id: updatedRecord.id,
-          event_type: "step_advance",
-          step_key: sourceNode.id,
-          payload: {
-            transition_id: action.id,
-            transition_label: action.label,
-            from_node_id: sourceNode.id,
-            to_node_id: action.node_id,
-          },
-        })
-
-      if (eventError) {
-        throw eventError
-      }
-
-      await loadTrackPage()
-    } catch (error) {
-      console.error("Error advancing track:", error)
-      setTrackError("לא הצלחנו לקדם את המסלול כרגע.")
-    } finally {
-      setPendingTransitionId(null)
-    } */
   }
 
   const currentNodeLabel = track?.currentNode?.title || track?.currentStepKey || "לא הוגדר"
@@ -783,7 +788,7 @@ export default function TrackPage() {
   }
 
   const handleSaveSla = async () => {
-    if (!track) return
+    if (!track || !canManageSla) return
 
     setSavingSla(true)
     setTrackError(null)
@@ -1006,7 +1011,15 @@ export default function TrackPage() {
                       </InfoPanelDetailList>
                     </InfoPanelSection>
 
-                    <InfoPanelSection icon={TimerReset} title="ניהול SLA">
+                    <InfoPanelSection
+                      icon={TimerReset}
+                      title="ניהול SLA"
+                      description={
+                        canManageSla
+                          ? "אפשר לעדכן את מצב החישוב ואת ערך ה-SLA הבסיסי של המסלול."
+                          : "אפשר לצפות בנתוני ה-SLA, אך העריכה זמינה רק למנהלי נקודה ולמנהלי ארגון."
+                      }
+                    >
                       <InfoPanelDetailList>
                         <InfoPanelDetail
                           label="מצב חישוב"
@@ -1036,6 +1049,7 @@ export default function TrackPage() {
                           onChange={(event) =>
                             setSlaModeDraft(event.target.value as "derived" | "manual")
                           }
+                          disabled={!canManageSla || savingSla}
                         >
                           <option value="derived">Derived · עם modifiers</option>
                           <option value="manual">Manual · ללא modifiers</option>
@@ -1046,13 +1060,14 @@ export default function TrackPage() {
                           min="0"
                           value={trackSlaDraft}
                           onChange={(event) => setTrackSlaDraft(event.target.value)}
+                          disabled={!canManageSla || savingSla}
                         />
                         <Button
                           type="button"
                           variant="outline"
                           className="rounded-xl"
                           onClick={handleSaveSla}
-                          disabled={savingSla}
+                          disabled={!canManageSla || savingSla}
                         >
                           {savingSla ? "שומר..." : "שמירת SLA"}
                         </Button>

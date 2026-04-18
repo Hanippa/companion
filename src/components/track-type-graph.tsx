@@ -230,7 +230,7 @@ export function TrackTypeGraph({
       observer.disconnect()
       window.removeEventListener("resize", computeLines)
     }
-  }, [schema, rows])
+  }, [schema, rows, zoom])
 
   if (!schema || schema.nodes.length === 0) {
     return (
@@ -270,6 +270,13 @@ export function TrackTypeGraph({
           aria-label="הגדלת תצוגה"
         >
           <ZoomIn className="size-4" />
+        </button>
+        <button
+          type="button"
+          className="rounded-full px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          onClick={() => setZoom(1)}
+        >
+          איפוס
         </button>
       </div>
 

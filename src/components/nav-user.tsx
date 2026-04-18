@@ -18,12 +18,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import {
-  BellIcon,
-  CircleUserRoundIcon,
-  EllipsisVerticalIcon,
-  LogOutIcon,
-} from "lucide-react"
+import { CircleUserRoundIcon, EllipsisVerticalIcon, LogOutIcon } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 
 import { getAvatarInitials } from "@/lib/avatar"
@@ -97,10 +92,6 @@ export function NavUser({
               <DropdownMenuItem onClick={() => navigate("/profile")}>
                 <CircleUserRoundIcon />
                 פרופיל
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <BellIcon />
-                התראות
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

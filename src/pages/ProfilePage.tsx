@@ -2,21 +2,25 @@ import { useEffect, useMemo, useState, type ChangeEvent, type CSSProperties } fr
 import { CameraIcon, Loader2Icon, SaveIcon, UserRoundIcon } from "lucide-react"
 
 import { AppSidebar } from "@/components/app-sidebar"
+import {
+  InfoPanel,
+  InfoPanelBody,
+  InfoPanelDetail,
+  InfoPanelDetailList,
+  InfoPanelHeader,
+  InfoPanelSection,
+} from "@/components/info-panel"
+import {
+  PageBody,
+  PageMainContent,
+  PageMainLayout,
+  PageMainRail,
+} from "@/components/page-main-layout"
 import { SiteHeader } from "@/components/site-header"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { useAuth } from "@/contexts/AuthContext"
@@ -99,9 +103,7 @@ export default function ProfilePage() {
   }
 
   const handleProfileSave = async () => {
-    if (!user) {
-      return
-    }
+    if (!user) return
 
     setSaving(true)
     setErrorMessage(null)
@@ -152,6 +154,13 @@ export default function ProfilePage() {
     }
   }
 
+  const handleReset = () => {
+    setDisplayName(profile?.display_name || "")
+    setSelectedAvatarFile(null)
+    setErrorMessage(null)
+    setSuccessMessage(null)
+  }
+
   return (
     <SidebarProvider
       style={
@@ -161,25 +170,21 @@ export default function ProfilePage() {
         } as CSSProperties
       }
     >
-      <AppSidebar className="" side="right" variant="inset" />
+      <AppSidebar side="right" variant="inset" />
       <SidebarInset>
         <SiteHeader title="פרופיל משתמש" />
-        <div className="flex flex-1 flex-col">
-          <div className="@container/main flex flex-1 flex-col gap-2">
-            <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 py-4 md:gap-6 md:py-6">
-              <div className="px-4 lg:px-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <UserRoundIcon className="size-5" />
-                      פרופיל משתמש
-                    </CardTitle>
-                    <CardDescription>
-                      עדכנו את השם והתמונה שיופיעו ברחבי המערכת.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
-                    <div className="flex flex-col items-center gap-4 rounded-2xl border border-border/60 bg-muted/20 p-5">
+        <PageBody>
+          <div className="page-stack flex-1" dir="rtl">
+            <PageMainLayout>
+              <PageMainRail>
+                <InfoPanel>
+                  <InfoPanelHeader
+                    icon={UserRoundIcon}
+                    title={displayName.trim() || profile?.display_name || "משתמש"}
+                    description="המידע כאן מוצג ברחבי המערכת, כולל ברשימות צוות, היסטוריית אירועים וממשק הניווט."
+                  />
+                  <InfoPanelBody>
+                    <div className="flex flex-col items-center gap-4 rounded-2xl border border-border/60 bg-muted/20 px-4 py-5">
                       <Avatar data-size="lg" className="size-28 rounded-3xl">
                         <AvatarImage src={avatarUrl} alt={displayName || profile?.display_name} />
                         <AvatarFallback className="rounded-3xl text-xl">
@@ -205,73 +210,87 @@ export default function ProfilePage() {
                       </div>
                     </div>
 
-                    <div className="space-y-5">
-                      {errorMessage ? (
-                        <Alert variant="destructive">
-                          <AlertTitle>שמירת הפרופיל נכשלה</AlertTitle>
-                          <AlertDescription>{errorMessage}</AlertDescription>
-                        </Alert>
-                      ) : null}
-                      {successMessage ? (
-                        <Alert>
-                          <AlertTitle>הפרופיל עודכן</AlertTitle>
-                          <AlertDescription>{successMessage}</AlertDescription>
-                        </Alert>
-                      ) : null}
-
-                      <div className="space-y-2">
-                        <label htmlFor="display-name" className="text-sm font-medium">
-                          שם תצוגה
-                        </label>
-                        <Input
-                          id="display-name"
-                          value={displayName}
-                          onChange={(event) => setDisplayName(event.target.value)}
-                          placeholder="הזינו שם תצוגה"
+                    <InfoPanelSection title="מה יוצג לאחרים?">
+                      <InfoPanelDetailList>
+                        <InfoPanelDetail label="שם תצוגה" value={displayName.trim() || "לא הוגדר"} />
+                        <InfoPanelDetail label="אימייל" value={user?.email || "—"} />
+                        <InfoPanelDetail
+                          label="תמונת פרופיל"
+                          value={selectedAvatarFile ? "מוכנה לשמירה" : avatarUrl ? "קיימת" : "ללא תמונה"}
                         />
-                      </div>
+                      </InfoPanelDetailList>
+                    </InfoPanelSection>
+                  </InfoPanelBody>
+                </InfoPanel>
+              </PageMainRail>
 
-                      <div className="space-y-2">
-                        <label htmlFor="email" className="text-sm font-medium">
-                          אימייל
-                        </label>
-                        <Input
-                          id="email"
-                          value={user?.email || ""}
-                          disabled
-                          readOnly
-                        />
-                      </div>
+              <PageMainContent>
+                <Card className="border-border/70 shadow-none">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-xl">
+                      <UserRoundIcon className="size-5" />
+                      עריכת פרופיל
+                    </CardTitle>
+                    <CardDescription>
+                      עדכנו את השם והתמונה שיופיעו ברחבי המערכת.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-5">
+                    {errorMessage ? (
+                      <Alert variant="destructive">
+                        <AlertTitle>שמירת הפרופיל נכשלה</AlertTitle>
+                        <AlertDescription>{errorMessage}</AlertDescription>
+                      </Alert>
+                    ) : null}
 
-                      <div className="flex flex-wrap justify-end gap-3">
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setDisplayName(profile?.display_name || "")
-                            setSelectedAvatarFile(null)
-                            setErrorMessage(null)
-                            setSuccessMessage(null)
-                          }}
-                          disabled={saving}
-                        >
-                          איפוס
-                        </Button>
-                        <Button onClick={handleProfileSave} disabled={saving || !user}>
-                          {saving ? (
-                            <Loader2Icon className="size-4 animate-spin" />
-                          ) : (
-                            <SaveIcon className="size-4" />
-                          )}
-                          שמירת שינויים
-                        </Button>
-                      </div>
+                    {successMessage ? (
+                      <Alert>
+                        <AlertTitle>הפרופיל עודכן</AlertTitle>
+                        <AlertDescription>{successMessage}</AlertDescription>
+                      </Alert>
+                    ) : null}
+
+                    <div className="space-y-2">
+                      <label htmlFor="display-name" className="text-sm font-medium">
+                        שם תצוגה
+                      </label>
+                      <Input
+                        id="display-name"
+                        value={displayName}
+                        onChange={(event) => setDisplayName(event.target.value)}
+                        placeholder="הזינו שם תצוגה"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label htmlFor="email" className="text-sm font-medium">
+                        אימייל
+                      </label>
+                      <Input id="email" value={user?.email || ""} disabled readOnly />
+                    </div>
+
+                    <Alert>
+                      <AlertTitle>טיפ</AlertTitle>
+                      <AlertDescription>
+                        תמונת פרופיל ושם תצוגה ברורים עוזרים לזהות מי קידם מסלול, מי שייך לצוות, ומי מופיע בעמודי המעקב הציבוריים.
+                      </AlertDescription>
+                    </Alert>
+
+                    <div className="flex flex-wrap justify-end gap-3">
+                      <Button variant="outline" onClick={handleReset} disabled={saving}>
+                        איפוס
+                      </Button>
+                      <Button onClick={handleProfileSave} disabled={saving || !user}>
+                        {saving ? <Loader2Icon className="size-4 animate-spin" /> : <SaveIcon className="size-4" />}
+                        שמירת שינויים
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
-              </div>
-            </div>
+              </PageMainContent>
+            </PageMainLayout>
           </div>
-        </div>
+        </PageBody>
       </SidebarInset>
     </SidebarProvider>
   )

@@ -120,6 +120,7 @@ export default function PointPage() {
   const [loadingMembers, setLoadingMembers] = useState(true)
   const [membersError, setMembersError] = useState<string | null>(null)
   const [canEdit, setCanEdit] = useState(false)
+  const [canCreateTrack, setCanCreateTrack] = useState(false)
   const [canManageTeam, setCanManageTeam] = useState(false)
   const [loadingPermissions, setLoadingPermissions] = useState(true)
   const [pointName, setPointName] = useState("")
@@ -205,7 +206,14 @@ export default function PointPage() {
       setMembersError(null)
       setLoadingPermissions(true)
 
-      const [tracksResult, membersResult, orgPermissionResult, pointPermissionResult, pointResult] = await Promise.all([
+      const [
+        tracksResult,
+        membersResult,
+        orgPermissionResult,
+        pointPermissionResult,
+        pointAccessResult,
+        pointResult,
+      ] = await Promise.all([
         supabase
           .from("tracking_records")
           .select("id, ref_id, point_id, track_type_id, name, status, current_step, sla, sla_mode, data, notes, track_type:track_types(id, name, status, sla, form_schema, track_schema, vesrion)")
@@ -230,6 +238,13 @@ export default function PointPage() {
           .eq("user_id", user?.id ?? "")
           .eq("status", "active")
           .eq("role", "admin"),
+        supabase
+          .from("point_users")
+          .select("role")
+          .eq("point_id", pointIdFromRoute)
+          .eq("user_id", user?.id ?? "")
+          .eq("status", "active")
+          .limit(1),
         supabase
           .from("points")
           .select("id, organization_id, name, notes, status")
@@ -302,14 +317,21 @@ export default function PointPage() {
       }
       setLoadingTracks(false)
 
-      if (orgPermissionResult.error || pointPermissionResult.error) {
-        console.error("Error fetching point permissions:", orgPermissionResult.error || pointPermissionResult.error)
+      if (orgPermissionResult.error || pointPermissionResult.error || pointAccessResult.error) {
+        console.error("Error fetching point permissions:", {
+          orgPermissionError: orgPermissionResult.error,
+          pointPermissionError: pointPermissionResult.error,
+          pointAccessError: pointAccessResult.error,
+        })
         setCanEdit(false)
+        setCanCreateTrack(false)
         setCanManageTeam(false)
       } else {
         const hasOrganizationManagementAccess = (orgPermissionResult.data ?? []).length > 0
         const hasPointAdminAccess = (pointPermissionResult.data ?? []).length > 0
+        const hasPointAccess = (pointAccessResult.data ?? []).length > 0
         setCanEdit(hasOrganizationManagementAccess)
+        setCanCreateTrack(hasOrganizationManagementAccess || hasPointAccess)
         setCanManageTeam(hasOrganizationManagementAccess || hasPointAdminAccess)
       }
       setLoadingPermissions(false)
@@ -580,6 +602,7 @@ export default function PointPage() {
                               variant="outline"
                               size="sm"
                               className="rounded-[1rem]"
+                              disabled={!canCreateTrack}
                               onClick={() =>
                                 navigate(
                                   `/${getOrganizationSegment(selectedOrganization)}/${getPointSegment(
