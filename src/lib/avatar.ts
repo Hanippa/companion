@@ -5,6 +5,7 @@ const STANDARD_AVATAR_EXTENSION = "webp"
 const STANDARD_AVATAR_MIME_TYPE = "image/webp"
 const STANDARD_AVATAR_SIZE = 512
 const SIGNED_AVATAR_URL_TTL_MS = 50 * 60 * 1000
+export const AVATAR_BUCKET = import.meta.env.VITE_SUPABASE_AVATAR_BUCKET || "avatars"
 
 const signedAvatarUrlCache = new Map<string, { expiresAt: number; value: string }>()
 const signedAvatarUrlInflight = new Map<string, Promise<string | null>>()
@@ -23,7 +24,7 @@ async function createSignedAvatarUrl(path: string) {
   }
 
   const request = supabase.storage
-    .from("avatars")
+    .from(AVATAR_BUCKET)
     .createSignedUrl(path, 3600)
     .then(({ data, error }) => {
       if (error || !data?.signedUrl) {

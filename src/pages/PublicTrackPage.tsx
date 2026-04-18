@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { CircleAlert, CircleDot, PackageCheck } from "lucide-react"
 
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { getAvatarInitials } from "@/lib/avatar"
 import { supabase } from "@/lib/supabase"
 import {
   getTrackCurrentNode,
@@ -51,6 +53,8 @@ type PublicTrackEvent = {
   step_key: string | null
   payload: Record<string, unknown> | null
   created_at: string
+  actor_name: string | null
+  actor_avatar_url: string | null
 }
 
 type PublicTrackFunctionResponse = {
@@ -99,6 +103,22 @@ const getRealtimeStatusLabel = (status: RealtimeStatus) => {
 const getPayloadString = (payload: Record<string, unknown> | null | undefined, key: string) => {
   const value = payload?.[key]
   return typeof value === "string" && value.trim() ? value.trim() : null
+}
+
+const getPublicEventTitle = (event: PublicTrackEvent) => {
+  if (event.event_type === "step_advance") {
+    return getPayloadString(event.payload, "transition_label") || "הטיפול התקדם"
+  }
+
+  return getPayloadString(event.payload, "note") || "עדכון כללי"
+}
+
+const getNodeTitle = (
+  schema: NormalizedTrackSchema | null,
+  nodeId: string | null | undefined
+) => {
+  if (!schema || !nodeId) return null
+  return schema.nodes.find((node) => node.id === nodeId)?.title ?? null
 }
 
 const buildVisibleNodes = (
@@ -226,28 +246,11 @@ export default function PublicTrackPage() {
         error: sessionError,
       } = await supabase.auth.getSession()
 
-      console.log("[public track realtime] session check", {
-        token: trackingToken,
-        topic,
-        hasSession: Boolean(session),
-        hasAccessToken: Boolean(session?.access_token),
-        sessionError,
-      })
-
       if (session?.access_token) {
         await supabase.realtime.setAuth(session.access_token)
-        console.log("[public track realtime] realtime auth set", {
-          token: trackingToken,
-          topic,
-        })
       }
 
       if (!isActive) return
-
-      console.log("[public track realtime] subscribing", {
-        token: trackingToken,
-        topic,
-      })
 
       channel = supabase
         .channel(topic, {
@@ -255,32 +258,26 @@ export default function PublicTrackPage() {
             private: false,
           },
         })
-        .on("broadcast", { event: "track_updated" }, (payload) => {
-          console.log("[public track realtime] broadcast received", {
-            token: trackingToken,
-            topic,
-            payload,
-          })
+        .on("broadcast", { event: "track_updated" }, () => {
           void loadTrack({ silent: true })
         })
         .subscribe((status, err) => {
           setRealtimeStatus(status as RealtimeStatus)
-          console.log("[public track realtime] channel status", {
-            token: trackingToken,
-            topic,
-            status,
-            err,
-          })
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            console.error("Public track realtime subscription issue:", {
+              token: trackingToken,
+              topic,
+              status,
+              err,
+              sessionError,
+            })
+          }
         })
     }
 
     void subscribeToRealtime()
 
     return () => {
-      console.log("[public track realtime] cleanup removing channel", {
-        token: trackingToken,
-        topic,
-      })
       isActive = false
       setRealtimeStatus("CLOSED")
       if (channel) {
@@ -473,15 +470,46 @@ export default function PublicTrackPage() {
                               {nodeEvents.map((event) => (
                                 <div
                                   key={event.id}
-                                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/20 px-3 py-2 text-sm"
+                                  className="rounded-xl bg-muted/20 px-3 py-3 text-sm"
                                 >
-                                  <div className="text-muted-foreground">
-                                    {event.event_type === "step_advance"
-                                      ? getPayloadString(event.payload, "transition_label") || "הטיפול התקדם לשלב זה"
-                                      : "עדכון כללי"}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {new Date(event.created_at).toLocaleString("he-IL")}
+                                  <div className="flex items-start gap-3">
+                                    <Avatar className="size-9 border border-border/60">
+                                      <AvatarImage
+                                        src={event.actor_avatar_url ?? undefined}
+                                        alt={event.actor_name ?? "נציג שירות"}
+                                        loading="lazy"
+                                        referrerPolicy="no-referrer"
+                                      />
+                                      <AvatarFallback className="text-xs">
+                                        {getAvatarInitials(event.actor_name || "נציג שירות")}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <div className="min-w-0 flex-1 space-y-1">
+                                      <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <div className="min-w-0">
+                                          <div className="truncate text-sm font-medium">
+                                            {event.actor_name?.trim() || "נציג שירות"}
+                                          </div>
+                                          <div className="text-sm text-muted-foreground">
+                                            {getPublicEventTitle(event)}
+                                          </div>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {new Date(event.created_at).toLocaleString("he-IL")}
+                                        </div>
+                                      </div>
+                                      {event.event_type === "step_advance" &&
+                                      getPayloadString(event.payload, "to_node_id") ? (
+                                        <div className="text-xs text-muted-foreground">
+                                          יעד:{" "}
+                                          {getNodeTitle(
+                                            track.trackSchema,
+                                            getPayloadString(event.payload, "to_node_id")
+                                          ) ??
+                                            getPayloadString(event.payload, "to_node_id")}
+                                        </div>
+                                      ) : null}
+                                    </div>
                                   </div>
                                 </div>
                               ))}

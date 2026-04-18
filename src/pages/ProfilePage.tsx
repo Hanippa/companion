@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { useAuth } from "@/contexts/AuthContext"
 import {
+  AVATAR_BUCKET,
   getAvatarInitials,
   getAvatarStoragePath,
   isSupportedAvatarFile,
@@ -113,7 +114,7 @@ export default function ProfilePage() {
         const normalizedAvatarFile = await normalizeAvatarFile(selectedAvatarFile)
         const avatarPath = getAvatarStoragePath(user.id)
         const { error: uploadError } = await supabase.storage
-          .from("avatars")
+          .from(AVATAR_BUCKET)
           .upload(avatarPath, normalizedAvatarFile, {
             cacheControl: "3600",
             upsert: true,

@@ -32,7 +32,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { getOrganizationSegment, getPointSegment, getRecordIdFromSegment, getTrackSegment } from "@/lib/drilldown"
@@ -427,10 +427,6 @@ export default function TrackPage() {
     let channel: ReturnType<typeof supabase.channel> | null = null
     setRealtimeStatus("CONNECTING")
 
-    console.log("[track realtime] effect start", {
-      trackId: trackIdFromRoute,
-    })
-
     const channelName = `track-page-${trackIdFromRoute}`
 
     const subscribeToRealtime = async () => {
@@ -439,26 +435,11 @@ export default function TrackPage() {
         error: sessionError,
       } = await supabase.auth.getSession()
 
-      console.log("[track realtime] session check", {
-        trackId: trackIdFromRoute,
-        hasSession: Boolean(session),
-        hasAccessToken: Boolean(session?.access_token),
-        sessionError,
-      })
-
       if (session?.access_token) {
         await supabase.realtime.setAuth(session.access_token)
-        console.log("[track realtime] realtime auth set", {
-          trackId: trackIdFromRoute,
-        })
       }
 
       if (!isActive) return
-
-      console.log("[track realtime] subscribing to channel", {
-        trackId: trackIdFromRoute,
-        channelName,
-      })
 
       channel = supabase
         .channel(channelName)
@@ -471,7 +452,6 @@ export default function TrackPage() {
             filter: `id=eq.${trackIdFromRoute}`,
           },
           (payload) => {
-            console.log("[track realtime] tracking_records UPDATE", payload)
             const nextCurrentStep =
               typeof payload.new.current_step === "string" ? payload.new.current_step : null
             const nextStatus =
@@ -512,7 +492,6 @@ export default function TrackPage() {
             filter: `tracking_record_id=eq.${trackIdFromRoute}`,
           },
           async (payload) => {
-            console.log("[track realtime] tracking_record_events INSERT", payload)
             const nextEvent = payload.new as RawEventRow
             let actor_name: string | null = null
             let actor_avatar_url: string | null = null
@@ -542,22 +521,23 @@ export default function TrackPage() {
             })
           }
         )
-        .subscribe((status) => {
+        .subscribe((status, err) => {
           setRealtimeStatus(status as RealtimeStatus)
-          console.log("[track realtime] channel status", {
-            trackId: trackIdFromRoute,
-            status,
-          })
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            console.error("Track realtime subscription issue:", {
+              trackId: trackIdFromRoute,
+              channelName,
+              status,
+              err,
+              sessionError,
+            })
+          }
         })
     }
 
     void subscribeToRealtime()
 
     return () => {
-      console.log("[track realtime] cleanup removing channel", {
-        trackId: trackIdFromRoute,
-        channelName,
-      })
       isActive = false
       setRealtimeStatus("CLOSED")
       if (channel) {
@@ -636,9 +616,18 @@ export default function TrackPage() {
         currentTrack && currentTrack.id === track.id
           ? {
               ...currentTrack,
-              currentStepKey: action.node_id,
+              currentStepKey:
+                typeof updatedRecord.current_step === "string"
+                  ? updatedRecord.current_step
+                  : action.node_id,
               currentNode:
-                currentTrack.trackSchema?.nodes.find((node) => node.id === action.node_id) ?? null,
+                currentTrack.trackSchema?.nodes.find(
+                  (node) =>
+                    node.id ===
+                    (typeof updatedRecord.current_step === "string"
+                      ? updatedRecord.current_step
+                      : action.node_id)
+                ) ?? null,
             }
           : currentTrack
       )
@@ -884,9 +873,11 @@ export default function TrackPage() {
               <PageMainLayout>
                 <PageMainContent className="xl:order-2">
                   <Card className="border-border/70 shadow-none">
-                    <CardHeader className="gap-2 [&>h3]:hidden">
-                      <CardTitle className="text-xl">מהלך המסלול</CardTitle>
+                    <CardHeader className="gap-3">
                       <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="text-sm font-medium">התקדמות המסלול</div>
+                        </div>
                         <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background px-3 py-1 text-xs font-medium">
                           <span
                             className={[

@@ -1,19 +1,15 @@
-import Timeline from "./Timeline";
-
-
 export default function Tracking() {
   return (
-<div className="w-full h-full bg-white opacity-90 rounded-2xl">
-<div className='flex flex-col p-4 md:p-14  h-full w-full justify-end items-center'>
-  <div className=' w-full flex flex-col items-end content-start mb-8 md:mb-14'>
-  <div className="mr-6 whitespace-nowrap text-xl md:text-2xl" dir='rtl'>זמן תיקון משוער : </div>
-<div className=" mr-6 text-5xl md:text-6xl" >20\01\2026</div>
-  </div>
-<Timeline/>
-</div>
-
-</div>
-  );
+    <div className="flex h-full w-full items-center justify-center rounded-2xl bg-white/90 p-6">
+      <div className="w-full max-w-xl rounded-2xl border border-border/60 bg-background p-8 text-right shadow-none">
+        <div className="space-y-2" dir="rtl">
+          <div className="text-sm font-medium text-muted-foreground">זמן תיקון משוער</div>
+          <div className="text-4xl font-semibold tracking-tight md:text-5xl">20/01/2026</div>
+          <div className="text-sm leading-6 text-muted-foreground">
+            רכיב זה נשמר כרגע כתצוגת placeholder פנימית עד שיוחלף בזרימת מעקב מלאה.
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
-
-

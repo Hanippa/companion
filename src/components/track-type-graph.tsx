@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { ArrowLeft, Flag, Route, TimerReset } from "lucide-react"
+import { ArrowDown, Flag, Route, TimerReset, ZoomIn, ZoomOut } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
@@ -10,6 +10,7 @@ type TrackTypeGraphProps = {
   schema: NormalizedTrackSchema | null
   className?: string
   highlightedNodeId?: string | null
+  onNodeSelect?: (nodeId: string) => void
 }
 
 type PositionedLine = {
@@ -68,18 +69,22 @@ function GraphNodeCard({
   isEnd,
   isHighlighted,
   registerRef,
+  onSelect,
 }: {
   node: TrackNode
   isStart: boolean
   isEnd: boolean
   isHighlighted: boolean
   registerRef: (element: HTMLDivElement | null) => void
+  onSelect?: () => void
 }) {
   return (
     <Card
       ref={registerRef}
+      onClick={onSelect}
       className={cn(
         "relative border-border/70 shadow-none transition-colors",
+        onSelect && "cursor-pointer hover:border-primary/35",
         isHighlighted && "border-primary/50 bg-primary/5"
       )}
     >
@@ -133,7 +138,7 @@ function GraphNodeCard({
                   variant="outline"
                   className="rounded-full gap-1.5 border-dashed"
                 >
-                  <ArrowLeft className="size-3.5" />
+                  <ArrowDown className="size-3.5" />
                   {connection.label}
                 </Badge>
               ))}
@@ -149,12 +154,14 @@ export function TrackTypeGraph({
   schema,
   className,
   highlightedNodeId = null,
+  onNodeSelect,
 }: TrackTypeGraphProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const nodeRefs = useRef(new Map<string, HTMLDivElement>())
   const [lines, setLines] = useState<PositionedLine[]>([])
+  const [zoom, setZoom] = useState(1)
 
-  const columns = useMemo(() => {
+  const rows = useMemo(() => {
     if (!schema) return []
 
     const depths = getNodeDepths(schema)
@@ -191,7 +198,7 @@ export function TrackTypeGraph({
 
         const sourceRect = source.getBoundingClientRect()
         const x1 = sourceRect.left + sourceRect.width / 2 - containerRect.left
-        const y1 = sourceRect.top + sourceRect.height / 2 - containerRect.top
+        const y1 = sourceRect.bottom - containerRect.top
 
         node.next_nodes.forEach((connection) => {
           const target = nodeRefs.current.get(connection.node_id)
@@ -203,7 +210,7 @@ export function TrackTypeGraph({
             x1,
             y1,
             x2: targetRect.left + targetRect.width / 2 - containerRect.left,
-            y2: targetRect.top + targetRect.height / 2 - containerRect.top,
+            y2: targetRect.top - containerRect.top,
           })
         })
       })
@@ -223,7 +230,7 @@ export function TrackTypeGraph({
       observer.disconnect()
       window.removeEventListener("resize", computeLines)
     }
-  }, [schema, columns])
+  }, [schema, rows])
 
   if (!schema || schema.nodes.length === 0) {
     return (
@@ -246,6 +253,26 @@ export function TrackTypeGraph({
         className
       )}
     >
+      <div className="absolute left-4 top-4 z-20 flex items-center gap-2 rounded-full border border-border/70 bg-background/95 px-2 py-1 shadow-sm">
+        <button
+          type="button"
+          className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          onClick={() => setZoom((current) => Math.max(0.7, Number((current - 0.1).toFixed(2))))}
+          aria-label="הקטנת תצוגה"
+        >
+          <ZoomOut className="size-4" />
+        </button>
+        <div className="min-w-12 text-center text-xs font-medium">{Math.round(zoom * 100)}%</div>
+        <button
+          type="button"
+          className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          onClick={() => setZoom((current) => Math.min(1.6, Number((current + 0.1).toFixed(2))))}
+          aria-label="הגדלת תצוגה"
+        >
+          <ZoomIn className="size-4" />
+        </button>
+      </div>
+
       <svg className="pointer-events-none absolute inset-0 size-full" aria-hidden="true">
         {lines.map((line) => (
           <line
@@ -261,16 +288,28 @@ export function TrackTypeGraph({
         ))}
       </svg>
 
-      <div className="relative z-10 flex min-w-max gap-4" dir="ltr">
-        {columns.map((column) => (
-          <div key={column.depth} className="flex w-80 shrink-0 flex-col gap-4">
-            {column.nodes.map((node) => (
+      <div
+        className="relative z-10 flex min-w-[56rem] origin-top-center flex-col gap-8 pt-12"
+        dir="rtl"
+        style={{ transform: `scale(${zoom})` }}
+      >
+        {rows.map((row, rowIndex) => (
+          <div key={row.depth} className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs font-medium tracking-[0.18em] text-muted-foreground">
+                שכבה {rowIndex + 1}
+              </div>
+              <div className="text-xs text-muted-foreground">{row.nodes.length} צמתים</div>
+            </div>
+            <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+              {row.nodes.map((node) => (
               <GraphNodeCard
                 key={node.id}
                 node={node}
                 isStart={schema.start_node_id === node.id}
                 isEnd={schema.end_node_id === node.id}
                 isHighlighted={highlightedNodeId === node.id}
+                onSelect={onNodeSelect ? () => onNodeSelect(node.id) : undefined}
                 registerRef={(element) => {
                   if (element) {
                     nodeRefs.current.set(node.id, element)
@@ -280,6 +319,7 @@ export function TrackTypeGraph({
                 }}
               />
             ))}
+            </div>
           </div>
         ))}
       </div>
