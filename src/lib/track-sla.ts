@@ -25,6 +25,15 @@ export type TrackSlaSummary = {
   isCurrentNodeOverdue: boolean
 }
 
+export type NodeSlaSnapshot = {
+  startedAt: string | null
+  slaMinutes: number | null
+  elapsedMs: number | null
+  remainingMs: number | null
+  progressPercent: number
+  isOverdue: boolean
+}
+
 const MINUTE_MS = 60 * 1000
 
 const getTimestamp = (value: string | null | undefined) => {
@@ -112,6 +121,46 @@ const getNodeEntryTimestamp = (
   }
 
   return null
+}
+
+export const calculateNodeSlaSnapshot = ({
+  schema,
+  events,
+  createdAt,
+  nodeId,
+  now = Date.now(),
+}: {
+  schema: NormalizedTrackSchema | null
+  events: TrackEventLike[]
+  createdAt?: string | null
+  nodeId: string | null
+  now?: number
+}): NodeSlaSnapshot => {
+  const node =
+    schema?.nodes.find((candidate) => candidate.id === nodeId) ??
+    (schema?.start_node_id === nodeId
+      ? schema.nodes.find((candidate) => candidate.id === schema.start_node_id) ?? null
+      : null)
+  const startedAtTs = getNodeEntryTimestamp(nodeId, schema, events, createdAt)
+  const slaMinutes =
+    typeof node?.sla === "number" && Number.isFinite(node.sla) ? node.sla : null
+  const elapsedMs = startedAtTs !== null ? Math.max(0, now - startedAtTs) : null
+  const remainingMs =
+    slaMinutes !== null && elapsedMs !== null ? slaMinutes * MINUTE_MS - elapsedMs : null
+
+  const rawProgressPercent =
+    slaMinutes !== null && elapsedMs !== null && slaMinutes > 0
+      ? (elapsedMs / (slaMinutes * MINUTE_MS)) * 100
+      : 0
+
+  return {
+    startedAt: startedAtTs !== null ? new Date(startedAtTs).toISOString() : null,
+    slaMinutes,
+    elapsedMs,
+    remainingMs,
+    progressPercent: Math.max(0, Math.min(100, rawProgressPercent)),
+    isOverdue: typeof remainingMs === "number" ? remainingMs < 0 : false,
+  }
 }
 
 const getVisitedNodes = (

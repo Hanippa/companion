@@ -158,19 +158,19 @@ const resolveRefId = (data: Record<string, Record<string, unknown>>) => {
 const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
 
-const buildTrackName = (
-  trackType: TrackType | null,
-  data: Record<string, Record<string, unknown>>
-) => {
-  const sapValue =
-    (data.sap_details?.sap_tracking_number as string | undefined) ||
-    (data.sap?.sap_tracking_number as string | undefined)
+const buildTrackName = ({
+  trackType,
+  point,
+  refId,
+}: {
+  trackType: TrackType | null
+  point: PointRecord | null
+  refId: number
+}) => {
+  const trackTypeLabel = trackType?.name?.trim() || "מסלול"
+  const pointLabel = point?.name?.trim() || `נקודה #${point?.id ?? "—"}`
 
-  if (sapValue?.trim()) {
-    return `${trackType?.name?.trim() || "מסלול"} - ${sapValue.trim()}`
-  }
-
-  return trackType?.name?.trim() || "מסלול חדש"
+  return `${trackTypeLabel} · ${pointLabel} · #${refId}`
 }
 
 const buildStoredFieldValue = (field: FormField, value: unknown) => {
@@ -498,7 +498,11 @@ export default function TrackCreatePage() {
 
     const currentStep = getInitialStepKey(selectedTrackType)
     const refId = resolveRefId(formData)
-    const name = buildTrackName(selectedTrackType, formData)
+    const name = buildTrackName({
+      trackType: selectedTrackType,
+      point,
+      refId,
+    })
     const storedData = buildStoredTrackData(selectedTrackType, formData)
     const resolvedSla = Number.isFinite(Number(trackSlaMinutes)) ? Number(trackSlaMinutes) : 0
 
@@ -581,7 +585,7 @@ export default function TrackCreatePage() {
         } as CSSProperties
       }
     >
-      <AppSidebar side="right" variant="inset" tracks={[]} tracksLoading={false} />
+      <AppSidebar side="right" variant="inset" />
       <SidebarInset>
         <SiteHeader
           title="יצירת מסלול"

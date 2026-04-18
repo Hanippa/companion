@@ -1,18 +1,17 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import {
   BarChart3Icon,
   CircleHelpIcon,
   LayoutDashboardIcon,
-  RouteIcon,
   SearchIcon,
   UserRoundIcon,
 } from "lucide-react"
 
 import Logo from "../../public/Logo.svg"
-import { NavDocuments } from "@/components/nav-documents"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
+import { NavTracks } from "@/components/nav-tracks"
 import { NavUser } from "@/components/nav-user"
 import {
   Sidebar,
@@ -25,12 +24,22 @@ import {
 } from "@/components/ui/sidebar"
 import { useAuth } from "@/contexts/AuthContext"
 import { resolveAvatarUrl } from "@/lib/avatar"
+import {
+  addRecentTrack,
+  pinTrack,
+  readTrackQuickAccess,
+  removeRecentTrack,
+  type TrackQuickAccessItem,
+  unpinTrack,
+} from "@/lib/track-quick-access"
 
-type TrackNavigationItem = {
+type CurrentTrackItem = {
   id: number
   name: string | null
-  url?: string
-  isActive?: boolean
+  url: string
+  pointName?: string | null
+  refId?: number | null
+  currentStepKey?: string | null
 }
 
 const navMain = [
@@ -65,17 +74,22 @@ const navSecondary = [
 ]
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
-  tracks?: TrackNavigationItem[]
-  tracksLoading?: boolean
+  currentTrack?: CurrentTrackItem | null
 }
 
 export function AppSidebar({
-  tracks = [],
-  tracksLoading = false,
+  currentTrack = null,
   ...props
 }: AppSidebarProps) {
   const { user, profile } = useAuth()
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined)
+  const [quickAccess, setQuickAccess] = useState<{
+    pinned: TrackQuickAccessItem[]
+    recent: TrackQuickAccessItem[]
+  }>({
+    pinned: [],
+    recent: [],
+  })
 
   useEffect(() => {
     const loadAvatar = async () => {
@@ -91,12 +105,51 @@ export function AppSidebar({
     void loadAvatar()
   }, [profile])
 
-  const trackItems = tracks.map((track) => ({
-    name: track.name?.trim() || `מסלול #${track.id}`,
-    url: track.url || "#",
-    icon: <RouteIcon className="size-4" />,
-    isActive: track.isActive,
-  }))
+  useEffect(() => {
+    if (!user?.id) {
+      setQuickAccess({ pinned: [], recent: [] })
+      return
+    }
+
+    setQuickAccess(readTrackQuickAccess(user.id))
+  }, [user?.id])
+
+  useEffect(() => {
+    if (!user?.id || !currentTrack) return
+
+    addRecentTrack(user.id, currentTrack)
+    setQuickAccess(readTrackQuickAccess(user.id))
+  }, [currentTrack, user?.id])
+
+  const pinnedItems = useMemo(
+    () =>
+      [...quickAccess.pinned].sort((left, right) =>
+        (right.pinnedAt ?? "").localeCompare(left.pinnedAt ?? "")
+      ),
+    [quickAccess.pinned]
+  )
+
+  const recentItems = useMemo(
+    () =>
+      quickAccess.recent.filter(
+        (recentItem) => !quickAccess.pinned.some((pinnedItem) => pinnedItem.id === recentItem.id)
+      ),
+    [quickAccess.pinned, quickAccess.recent]
+  )
+
+  const handlePinToggle = (trackId: number, pinned: boolean) => {
+    if (!user?.id) return
+
+    const nextState = pinned ? unpinTrack(user.id, trackId) : pinTrack(user.id, trackId)
+    setQuickAccess(nextState)
+  }
+
+  const handleRemoveRecent = (trackId: number) => {
+    if (!user?.id) return
+
+    const nextState = removeRecentTrack(user.id, trackId)
+    setQuickAccess(nextState)
+  }
 
   return (
     <Sidebar variant="inset" collapsible="offcanvas" {...props}>
@@ -128,11 +181,11 @@ export function AppSidebar({
 
       <SidebarContent>
         <NavMain items={navMain} />
-        <NavDocuments
-          label="מסלולים"
-          items={trackItems}
-          loading={tracksLoading}
-          emptyMessage="פתחו נקודה כדי לראות את המסלולים שלה"
+        <NavTracks
+          pinnedItems={pinnedItems}
+          recentItems={recentItems}
+          onPinToggle={handlePinToggle}
+          onRemoveRecent={handleRemoveRecent}
         />
         <NavSecondary items={navSecondary} className="mt-auto" />
       </SidebarContent>

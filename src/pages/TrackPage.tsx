@@ -108,6 +108,15 @@ type TrackRecord = {
   currentNode: TrackNode | null
 }
 
+type SidebarCurrentTrack = {
+  id: number
+  name: string | null
+  url: string
+  pointName?: string | null
+  refId?: number | null
+  currentStepKey?: string | null
+}
+
 type RawEventRow = {
   id: number
   user_id: string | null
@@ -166,7 +175,6 @@ export default function TrackPage() {
 
   const [track, setTrack] = useState<TrackRecord | null>(null)
   const [events, setEvents] = useState<TrackStepperEvent[]>([])
-  const [pointTracks, setPointTracks] = useState<Array<{ id: number; name: string | null; url: string; isActive?: boolean }>>([])
   const [loadingTrack, setLoadingTrack] = useState(true)
   const [trackError, setTrackError] = useState<string | null>(null)
   const [pendingTransitionId, setPendingTransitionId] = useState<string | null>(null)
@@ -252,7 +260,6 @@ export default function TrackPage() {
     if (trackIdFromRoute === null) {
       setTrack(null)
       setEvents([])
-      setPointTracks([])
       setTrackError("כתובת המסלול אינה תקינה.")
       setLoadingTrack(false)
       return
@@ -274,7 +281,6 @@ export default function TrackPage() {
       console.error("Error fetching track:", trackQueryError)
       setTrack(null)
       setEvents([])
-      setPointTracks([])
       setTrackError("לא הצלחנו לטעון את המסלול הזה כרגע.")
       setLoadingTrack(false)
       return
@@ -306,7 +312,6 @@ export default function TrackPage() {
     if (!point) {
       setTrack(nextTrack)
       setEvents([])
-      setPointTracks([])
       setTrackError("המסלול הזה אינו משויך לנקודה תקינה.")
       setLoadingTrack(false)
       return
@@ -315,7 +320,6 @@ export default function TrackPage() {
     if (pointIdFromRoute !== null && point.id !== pointIdFromRoute) {
       setTrack(nextTrack)
       setEvents([])
-      setPointTracks([])
       setTrackError("המסלול הזה אינו שייך לנקודה שנבחרה.")
       setLoadingTrack(false)
       return
@@ -324,31 +328,21 @@ export default function TrackPage() {
     if (selectedOrganization && point.organization_id !== selectedOrganization.id) {
       setTrack(nextTrack)
       setEvents([])
-      setPointTracks([])
       setTrackError("המסלול הזה אינו שייך לארגון שנבחר.")
       setLoadingTrack(false)
       return
     }
 
-    const [eventsResult, pointTracksResult] = await Promise.all([
+    const [eventsResult] = await Promise.all([
       supabase
         .from("tracking_record_events")
         .select("id, user_id, event_type, step_key, payload, created_at")
         .eq("tracking_record_id", trackData.id)
         .order("created_at", { ascending: true }),
-      supabase
-        .from("tracking_records")
-        .select("id, name, point_id")
-        .eq("point_id", point.id)
-        .order("updated_at", { ascending: false }),
     ])
 
     if (eventsResult.error) {
       console.error("Error fetching track events:", eventsResult.error)
-    }
-
-    if (pointTracksResult.error) {
-      console.error("Error fetching point tracks:", pointTracksResult.error)
     }
 
     const rawEvents = (eventsResult.data ?? []) as RawEventRow[]
@@ -361,24 +355,10 @@ export default function TrackPage() {
       actor_avatar_url: event.user_id ? profilesById[event.user_id]?.avatar_url ?? null : null,
     }))
 
-    const nextPointTracks = (pointTracksResult.data ?? []).map((row) => ({
-      id: row.id,
-      name: row.name,
-      url: `/${getOrganizationSegment({
-        id: point.organization_id,
-        name: selectedOrganization?.name ?? null,
-      })}/${getPointSegment(point)}/track/${getTrackSegment({
-        id: row.id,
-        name: row.name,
-      })}`,
-      isActive: row.id === trackData.id,
-    }))
-
     setTrack(nextTrack)
     setSlaModeDraft(trackData.sla_mode === "manual" ? "manual" : "derived")
     setTrackSlaDraft(String(trackData.sla ?? trackType?.sla ?? 0))
     setEvents(nextEvents)
-    setPointTracks(nextPointTracks)
     setLoadingTrack(false)
   }, [pointIdFromRoute, selectedOrganization, trackIdFromRoute])
 
@@ -393,7 +373,6 @@ export default function TrackPage() {
 
     setTrack(null)
     setEvents([])
-    setPointTracks([])
     void loadTrackPage()
   }, [
     loadTrackPage,
@@ -775,6 +754,22 @@ export default function TrackPage() {
       ? `${window.location.origin}/tracking/${track.publicTrackingToken}`
       : null
 
+  const currentTrackSidebarItem = useMemo<SidebarCurrentTrack | null>(() => {
+    if (!track || !selectedOrganization || !track.point) return null
+
+    return {
+      id: track.id,
+      name: getTrackRecordTitle(track),
+      url: `/${getOrganizationSegment(selectedOrganization)}/${getPointSegment(track.point)}/track/${getTrackSegment({
+        id: track.id,
+        name: track.name ?? track.trackType?.name ?? null,
+      })}`,
+      pointName: track.point.name,
+      refId: track.refId,
+      currentStepKey: track.currentNode?.title ?? track.currentStepKey,
+    }
+  }, [selectedOrganization, track])
+
   const handleCopyPublicTrackLink = async () => {
     if (!publicTrackUrl || !navigator.clipboard) return
 
@@ -835,8 +830,7 @@ export default function TrackPage() {
       <AppSidebar
         side="right"
         variant="inset"
-        tracks={pointTracks}
-        tracksLoading={loadingTrack}
+        currentTrack={currentTrackSidebarItem}
       />
       <SidebarInset dir="rtl">
         <SiteHeader

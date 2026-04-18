@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { CircleAlert, CircleDot, PackageCheck } from "lucide-react"
 
+import { TrackNodeSlaIndicator } from "@/components/track-node-sla-indicator"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -16,7 +17,12 @@ import {
   type NormalizedTrackSchema,
   type TrackNode,
 } from "@/lib/track-schema"
-import { calculateTrackSlaSummary, formatMinutesLabel, formatRemainingLabel } from "@/lib/track-sla"
+import {
+  calculateNodeSlaSnapshot,
+  calculateTrackSlaSummary,
+  formatMinutesLabel,
+  formatRemainingLabel,
+} from "@/lib/track-sla"
 
 type PointRecord = {
   id: number
@@ -113,10 +119,7 @@ const getPublicEventTitle = (event: PublicTrackEvent) => {
   return getPayloadString(event.payload, "note") || "עדכון כללי"
 }
 
-const getNodeTitle = (
-  schema: NormalizedTrackSchema | null,
-  nodeId: string | null | undefined
-) => {
+const getNodeTitle = (schema: NormalizedTrackSchema | null, nodeId: string | null | undefined) => {
   if (!schema || !nodeId) return null
   return schema.nodes.find((node) => node.id === nodeId)?.title ?? null
 }
@@ -169,7 +172,7 @@ export default function PublicTrackPage() {
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
-    const interval = window.setInterval(() => setNow(Date.now()), 30000)
+    const interval = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(interval)
   }, [])
 
@@ -188,9 +191,7 @@ export default function PublicTrackPage() {
 
       const { data, error: functionError } = await supabase.functions.invoke<PublicTrackFunctionResponse>(
         "get-track-data-by-token",
-        {
-          body: { token: trackingToken },
-        }
+        { body: { token: trackingToken } }
       )
 
       if (functionError || !data?.track) {
@@ -204,7 +205,8 @@ export default function PublicTrackPage() {
 
       const trackType = data.track.track_type ?? null
       const trackSchema = normalizeTrackSchema(trackType?.track_schema)
-      const nextTrack: PublicTrackRecord = {
+
+      setTrack({
         id: data.track.id,
         refId: data.track.ref_id,
         name: data.track.name,
@@ -219,9 +221,7 @@ export default function PublicTrackPage() {
         trackType,
         trackSchema,
         currentNode: getTrackCurrentNode(trackSchema, data.track.current_step),
-      }
-
-      setTrack(nextTrack)
+      })
       setEvents(data.events ?? [])
       setLoading(false)
     },
@@ -253,11 +253,7 @@ export default function PublicTrackPage() {
       if (!isActive) return
 
       channel = supabase
-        .channel(topic, {
-          config: {
-            private: false,
-          },
-        })
+        .channel(topic, { config: { private: false } })
         .on("broadcast", { event: "track_updated" }, () => {
           void loadTrack({ silent: true })
         })
@@ -295,6 +291,7 @@ export default function PublicTrackPage() {
     (node) => node.id === (track?.currentNode?.id ?? track?.currentStepKey)
   )
   const currentNodeLabel = track?.currentNode?.title || track?.currentStepKey || "מתעדכן"
+
   const slaSummary = useMemo(
     () =>
       calculateTrackSlaSummary({
@@ -373,7 +370,9 @@ export default function PublicTrackPage() {
                     </div>
                     <div className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-3">
                       <div className="text-xs text-muted-foreground">SLA למסלול</div>
-                      <div className="mt-2 text-sm font-medium">{formatMinutesLabel(slaSummary.effectiveTrackSlaMinutes)}</div>
+                      <div className="mt-2 text-sm font-medium">
+                        {formatMinutesLabel(slaSummary.effectiveTrackSlaMinutes)}
+                      </div>
                       <div className="mt-1 text-xs text-muted-foreground">
                         {slaSummary.trackRemainingMs !== null
                           ? formatRemainingLabel(slaSummary.trackRemainingMs)
@@ -395,27 +394,25 @@ export default function PublicTrackPage() {
 
             <Card className="rounded-3xl border-border/70 shadow-none">
               <CardHeader className="gap-2">
-                <div className="space-y-1">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="space-y-1">
-                      <CardTitle className="text-2xl">התקדמות הטיפול</CardTitle>
-                      <CardDescription>
-                        המסלול מוצג מהשלב הראשון ועד לנקודה שבה הטיפול נמצא כרגע.
-                      </CardDescription>
-                    </div>
-                    <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background px-3 py-1 text-xs font-medium">
-                      <span
-                        className={[
-                          "size-2 rounded-full",
-                          realtimeStatus === "SUBSCRIBED"
-                            ? "bg-red-500 shadow-[0_0_0_4px_rgba(239,68,68,0.12)]"
-                            : realtimeStatus === "CONNECTING"
-                              ? "bg-amber-500"
-                              : "bg-muted-foreground/40",
-                        ].join(" ")}
-                      />
-                      <span>{getRealtimeStatusLabel(realtimeStatus)}</span>
-                    </div>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <CardTitle className="text-2xl">התקדמות הטיפול</CardTitle>
+                    <CardDescription>
+                      המסלול מוצג מהשלב הראשון ועד לנקודה שבה הטיפול נמצא כרגע.
+                    </CardDescription>
+                  </div>
+                  <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background px-3 py-1 text-xs font-medium">
+                    <span
+                      className={[
+                        "size-2 rounded-full",
+                        realtimeStatus === "SUBSCRIBED"
+                          ? "bg-red-500 shadow-[0_0_0_4px_rgba(239,68,68,0.12)]"
+                          : realtimeStatus === "CONNECTING"
+                            ? "bg-amber-500"
+                            : "bg-muted-foreground/40",
+                      ].join(" ")}
+                    />
+                    <span>{getRealtimeStatusLabel(realtimeStatus)}</span>
                   </div>
                 </div>
               </CardHeader>
@@ -424,8 +421,17 @@ export default function PublicTrackPage() {
                   {visibleNodes.map((node, index) => {
                     const isCurrent = index === currentNodeIndex || node.id === track.currentStepKey
                     const isCompleted =
-                      currentNodeIndex === -1 ? !isCurrent && index < visibleNodes.length - 1 : index < currentNodeIndex
+                      currentNodeIndex === -1
+                        ? !isCurrent && index < visibleNodes.length - 1
+                        : index < currentNodeIndex
                     const nodeEvents = events.filter((event) => event.step_key === node.id)
+                    const nodeSlaSnapshot = calculateNodeSlaSnapshot({
+                      schema: track.trackSchema,
+                      events,
+                      createdAt: track.createdAt,
+                      nodeId: node.id,
+                      now,
+                    })
 
                     return (
                       <div key={node.id} className="relative flex gap-4 pb-6 last:pb-0">
@@ -457,7 +463,9 @@ export default function PublicTrackPage() {
                             <div className="space-y-1">
                               <div className="text-lg font-semibold">{node.title}</div>
                               {node.description ? (
-                                <div className="text-sm leading-6 text-muted-foreground">{node.description}</div>
+                                <div className="text-sm leading-6 text-muted-foreground">
+                                  {node.description}
+                                </div>
                               ) : null}
                             </div>
                             <div className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
@@ -465,13 +473,21 @@ export default function PublicTrackPage() {
                             </div>
                           </div>
 
+                          <TrackNodeSlaIndicator
+                            className="mt-4"
+                            slaMinutes={node.sla ?? null}
+                            remainingMs={isCurrent ? nodeSlaSnapshot.remainingMs : null}
+                            progressPercent={
+                              isCurrent ? nodeSlaSnapshot.progressPercent : isCompleted ? 100 : 0
+                            }
+                            isOverdue={isCurrent ? nodeSlaSnapshot.isOverdue : false}
+                            status={isCurrent ? "current" : isCompleted ? "completed" : "pending"}
+                          />
+
                           {nodeEvents.length > 0 ? (
                             <div className="mt-4 space-y-2 border-t border-border/60 pt-4">
                               {nodeEvents.map((event) => (
-                                <div
-                                  key={event.id}
-                                  className="rounded-xl bg-muted/20 px-3 py-3 text-sm"
-                                >
+                                <div key={event.id} className="rounded-xl bg-muted/20 px-3 py-3 text-sm">
                                   <div className="flex items-start gap-3">
                                     <Avatar className="size-9 border border-border/60">
                                       <AvatarImage

@@ -409,8 +409,6 @@ export default function PointPage() {
       <AppSidebar
         side="right"
         variant="inset"
-        tracks={tracks.map((track) => ({ id: track.id, name: getTrackRecordTitle(track), url: track.url }))}
-        tracksLoading={loadingTracks}
       />
       <SidebarInset>
         <SiteHeader
