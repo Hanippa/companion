@@ -23,17 +23,17 @@ import {
   InfoPanelStat,
   InfoPanelStats,
 } from "@/components/info-panel"
+import { MemberCard } from "@/components/member-card"
 import { PageBody, PageMainContent, PageMainLayout, PageMainRail } from "@/components/page-main-layout"
 import { SiteHeader } from "@/components/site-header"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { useAuth } from "@/contexts/AuthContext"
-import { getAvatarInitials, resolveAvatarUrl } from "@/lib/avatar"
+import { resolveAvatarUrl } from "@/lib/avatar"
 import {
   getOrganizationSegment,
   getPointSegment,
@@ -686,19 +686,15 @@ export default function PointPage() {
                           ) : (
                             <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
                               {members.map((member) => (
-                                <Card key={`${member.point_id}-${member.user_id}`} size="sm" className="border-border/70 shadow-none transition-colors hover:border-primary/35">
-                                  <CardContent className="flex items-center gap-3 py-4">
-                                    <Avatar className="size-11 rounded-[1rem]">
-                                      <AvatarImage src={member.avatarUrl} alt={formatMemberName(member)} />
-                                      <AvatarFallback className="rounded-[1rem]">{getAvatarInitials(member.profile?.display_name || member.title)}</AvatarFallback>
-                                    </Avatar>
-                                    <div className="min-w-0 flex-1">
-                                      <div className="truncate font-medium">{formatMemberName(member)}</div>
-                                      <div className="truncate text-xs text-muted-foreground">{formatMemberMeta(member)}</div>
-                                    </div>
-                                    <Badge variant="outline" className="rounded-full uppercase">{member.role || "member"}</Badge>
-                                  </CardContent>
-                                </Card>
+                                <MemberCard
+                                  key={`${member.point_id}-${member.user_id}`}
+                                  name={formatMemberName(member)}
+                                  meta={formatMemberMeta(member)}
+                                  avatarUrl={member.avatarUrl}
+                                  initialsSource={member.profile?.display_name || member.title}
+                                  badgeLabel={member.role || "member"}
+                                  className="border-border/70 bg-card transition-colors hover:border-primary/35"
+                                />
                               ))}
                             </div>
                           )}

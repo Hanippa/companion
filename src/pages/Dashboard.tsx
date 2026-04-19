@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import {
   ArrowLeft,
+  ArrowDown,
   Building2,
   CircleAlert,
   GitBranchPlus,
@@ -9,6 +10,7 @@ import {
   Plus,
   Route,
   ShieldUser,
+  Sparkles,
   Users2,
 } from "lucide-react"
 
@@ -18,9 +20,8 @@ import {
   InfoPanelBody,
   InfoPanelHeader,
   InfoPanelSection,
-  InfoPanelStat,
-  InfoPanelStats,
 } from "@/components/info-panel"
+import { MemberCard } from "@/components/member-card"
 import { PageMainContent, PageMainLayout, PageMainRail } from "@/components/page-main-layout"
 import { SiteHeader } from "@/components/site-header"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -54,7 +55,7 @@ import { getOrganizationsCached } from "@/lib/organizations"
 import { getProfilesByIdsCached } from "@/lib/profile-cache"
 import { supabase } from "@/lib/supabase"
 
-const ORGANIZATION_MEMBER_PREVIEW_LIMIT = 20
+const ORGANIZATION_MEMBER_PREVIEW_LIMIT = 3
 const POINT_MEMBER_AVATAR_LIMIT = 3
 
 type Organization = {
@@ -103,6 +104,20 @@ const getOrganizationDescription = (organization: Organization) =>
 
 const getPointDescription = (point: Point) =>
   point.notes?.trim() || "עדיין לא נוספו הערות לנקודה הזו."
+
+
+const getOrganizationRoleLabel = (role: string | null | undefined) => {
+  switch (role) {
+    case "owner":
+      return "בעלים"
+    case "admin":
+      return "מנהל"
+    case "member":
+      return "חבר צוות"
+    default:
+      return "חבר ארגון"
+  }
+}
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -236,7 +251,8 @@ export default function Dashboard() {
       setLoadingPoints(true)
       setPointsError(null)
 
-      const [pointsResult, membersResult] = await Promise.all([
+      const [pointsResult, membersCountResult, membersPreviewResult, ownerAccessResult] =
+        await Promise.all([
         supabase
           .from("points")
           .select("id, organization_id, name, notes, status")
@@ -244,17 +260,37 @@ export default function Dashboard() {
           .order("name", { ascending: true, nullsFirst: false }),
         supabase
           .from("organization_users")
-          .select("user_id, role, title")
+          .select("*", { count: "exact", head: true })
           .eq("organization_id", selectedOrganization.id)
           .eq("status", "active"),
+        supabase
+          .from("organization_users")
+          .select("user_id, role, title")
+          .eq("organization_id", selectedOrganization.id)
+          .eq("status", "active")
+          .limit(ORGANIZATION_MEMBER_PREVIEW_LIMIT),
+        supabase
+          .from("organization_users")
+          .select("role")
+          .eq("organization_id", selectedOrganization.id)
+          .eq("user_id", user?.id ?? "")
+          .eq("status", "active")
+          .maybeSingle(),
       ])
 
       if (!isMounted) return
 
-      if (pointsResult.error || membersResult.error) {
+      if (
+        pointsResult.error ||
+        membersCountResult.error ||
+        membersPreviewResult.error ||
+        ownerAccessResult.error
+      ) {
         console.error("Error fetching dashboard data:", {
           pointsError: pointsResult.error,
-          membersError: membersResult.error,
+          membersCountError: membersCountResult.error,
+          membersPreviewError: membersPreviewResult.error,
+          ownerAccessError: ownerAccessResult.error,
         })
         setPoints([])
         setPointsWithStats([])
@@ -267,16 +303,12 @@ export default function Dashboard() {
       }
 
       const nextPoints = (pointsResult.data ?? []) as Point[]
-      const organizationMembers = (membersResult.data ?? []) as OrganizationMemberSummary[]
-      const nextOrganizationMemberIds = organizationMembers.map((member) => member.user_id)
-      setCanManageTrackTypes(
-        organizationMembers.some(
-          (member) => member.user_id === user?.id && member.role === "owner"
-        )
-      )
+      const organizationMembers = (membersPreviewResult.data ?? []) as OrganizationMemberSummary[]
+      const nextOrganizationMembersCount = membersCountResult.count ?? 0
+      setCanManageTrackTypes(ownerAccessResult.data?.role === "owner")
 
       setPoints(nextPoints)
-      setOrganizationMembersCount(nextOrganizationMemberIds.length)
+      setOrganizationMembersCount(nextOrganizationMembersCount)
       setOrganizationMembers(organizationMembers)
 
       if (nextPoints.length === 0) {
@@ -465,122 +497,106 @@ export default function Dashboard() {
                   <PageMainLayout>
                     <PageMainRail>
                       <InfoPanel>
-                      <InfoPanelHeader
-                        icon={Building2}
-                        title={getOrganizationLabel(selectedOrganization)}
-                        description={getOrganizationDescription(selectedOrganization)}
-                        badge={
-                          <Badge
-                            variant={
-                              selectedOrganization.status === "active" ? "default" : "outline"
-                            }
-                            className="rounded-full"
+                        <InfoPanelHeader
+                          icon={Building2}
+                          title={getOrganizationLabel(selectedOrganization)}
+                          description={getOrganizationDescription(selectedOrganization)}
+                          badge={
+                            <Badge
+                              variant={
+                                selectedOrganization.status === "active" ? "default" : "outline"
+                              }
+                              className="rounded-full"
+                            >
+                              {getStatusLabel(selectedOrganization.status)}
+                            </Badge>
+                          }
+                        />
+
+                        <InfoPanelBody>
+                          {canManageTrackTypes ? (
+                            <InfoPanelSection
+                              icon={Sparkles}
+                              title="פעולות מהירות"
+                              description="הפעולות המרכזיות של הארגון מרוכזות כאן לגישה מהירה ונקייה יותר."
+                            >
+                              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-10 justify-start rounded-xl px-3"
+                                  onClick={() =>
+                                    navigate(`/${getOrganizationSegment(selectedOrganization)}/points/new`)
+                                  }
+                                >
+                                  <Plus className="size-4" />
+                                  יצירת נקודה
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-10 justify-start rounded-xl px-3"
+                                  onClick={() =>
+                                    navigate(`/${getOrganizationSegment(selectedOrganization)}/team`)
+                                  }
+                                >
+                                  <ShieldUser className="size-4" />
+                                  ניהול צוות
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-10 justify-start rounded-xl px-3 sm:col-span-2 xl:col-span-1"
+                                  onClick={() =>
+                                    navigate(`/${getOrganizationSegment(selectedOrganization)}/track-types`)
+                                  }
+                                >
+                                  <GitBranchPlus className="size-4" />
+                                  ניהול סוגי מסלולים
+                                </Button>
+                              </div>
+                            </InfoPanelSection>
+                          ) : null}
+
+                          <InfoPanelSection
+                            icon={Users2}
+                            title="חברי ארגון"
+                            description="תצוגה מקוצרת של חברי הצוות הפעילים בארגון."
                           >
-                            {getStatusLabel(selectedOrganization.status)}
-                          </Badge>
-                        }
-                      />
-
-                      <InfoPanelBody>
-                        <InfoPanelStats>
-                          <InfoPanelStat
-                            icon={MapPinned}
-                            label="נקודות"
-                            value={points.length}
-                            description="נקודות פעילות ושיוך בתוך הארגון"
-                          />
-                        </InfoPanelStats>
-
-                        <InfoPanelSection
-                          icon={Users2}
-                          title="חברי ארגון"
-                          description={`סה"כ ${organizationMembersCount} חברי ארגון פעילים`}
-                        >
-                          <OrganizationMembersList
-                            members={displayedOrganizationMembers}
-                            profilesById={profilesById}
-                            totalCount={organizationMembersCount}
-                          />
-                        </InfoPanelSection>
-
-                        {canManageTrackTypes ? (
-                          <InfoPanelSection
-                            icon={ShieldUser}
-                            title="ניהול צוות"
-                            description="בעלי ארגון יכולים ליצור משתמשים חדשים ולבנות את הצוות הארגוני שלהם."
-                            action={
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="rounded-xl"
-                                onClick={() =>
-                                  navigate(`/${getOrganizationSegment(selectedOrganization)}/team`)
-                                }
-                              >
-                                ניהול צוות
-                              </Button>
-                            }
-                          />
-                        ) : null}
-
-                        {canManageTrackTypes ? (
-                          <InfoPanelSection
-                            icon={GitBranchPlus}
-                            title="ניהול סוגי מסלולים"
-                            description="בעלי ארגון יכולים ליצור, לעדכן ולסקור תבניות מסלול בצורה ויזואלית."
-                            action={
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="rounded-xl"
-                                onClick={() =>
-                                  navigate(`/${getOrganizationSegment(selectedOrganization)}/track-types`)
-                                }
-                              >
-                                ניהול מסלולים
-                              </Button>
-                            }
-                          />
-                        ) : null}
-                      </InfoPanelBody>
-                    </InfoPanel>
+                            <OrganizationMembersList
+                              members={displayedOrganizationMembers}
+                              profilesById={profilesById}
+                              totalCount={organizationMembersCount}
+                              canManage={canManageTrackTypes}
+                              onManage={() =>
+                                navigate(`/${getOrganizationSegment(selectedOrganization)}/team`)
+                              }
+                            />
+                          </InfoPanelSection>
+                        </InfoPanelBody>
+                      </InfoPanel>
                     </PageMainRail>
 
                     <PageMainContent>
                       <Card className="border-border/70 shadow-none">
-                      <CardHeader className="gap-3">
-                        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                          <div className="space-y-2">
-                            <CardTitle className="flex items-center gap-2 text-xl">
-                              <MapPinned className="size-5" />
-                              נקודות הארגון
-                            </CardTitle>
-                            <CardDescription className="max-w-2xl leading-7">
-                              כל נקודה מציגה את המידע המרכזי שלה, את חברי הצוות הפעילים, ואת
-                              כמות המסלולים הקיימים בה.
-                            </CardDescription>
-                          </div>
+                        <CardHeader className="gap-3">
+                          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                            <div className="space-y-2">
+                              <CardTitle className="flex items-center gap-2 text-xl">
+                                <MapPinned className="size-5" />
+                                נקודות הארגון
+                              </CardTitle>
+                              <CardDescription className="max-w-2xl leading-7">
+                                כל נקודה מציגה את המידע המרכזי שלה, את חברי הצוות הפעילים, ואת
+                                כמות המסלולים הקיימים בה.
+                              </CardDescription>
+                            </div>
 
-                          <Badge variant="outline" className="rounded-full">
-                            סה"כ {points.length} נקודות
-                          </Badge>
-                        </div>
-                        {canManageTrackTypes ? (
-                          <div className="flex justify-end">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="rounded-xl"
-                              onClick={() =>
-                                navigate(`/${getOrganizationSegment(selectedOrganization)}/points/new`)
-                              }
-                            >
-                              <Plus className="size-4" />
-                              יצירת נקודה
-                            </Button>
+                            <Badge variant="outline" className="rounded-full">
+                              סה"כ {points.length} נקודות
+                            </Badge>
                           </div>
-                        ) : null}
-                      </CardHeader>
+                        </CardHeader>
 
                       <CardContent>
                         {pointsError ? (
@@ -734,10 +750,14 @@ function OrganizationMembersList({
   members,
   profilesById,
   totalCount,
+  canManage,
+  onManage,
 }: {
   members: OrganizationMemberSummary[]
   profilesById: Record<string, ProfileSummary>
   totalCount: number
+  canManage?: boolean
+  onManage?: () => void
 }) {
   if (members.length === 0) {
     return (
@@ -750,46 +770,68 @@ function OrganizationMembersList({
   const hiddenMembersCount = Math.max(totalCount - members.length, 0)
 
   return (
-    <div className="space-y-2">
-      <div className="max-h-[28rem] space-y-2 overflow-y-auto pe-1">
-        {members.map((organizationMember) => {
-          const profile = profilesById[organizationMember.user_id]
-          const organizationMemberTitle = organizationMember.title?.trim() || "חבר בארגון"
-          const memberDisplayName = profile?.display_name?.trim() || "חבר צוות"
-
-          return (
-            <div
-              key={organizationMember.user_id}
-              className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/15 px-3 py-2.5"
-            >
-              <Avatar className="size-10 rounded-xl">
-                <AvatarImage
-                  className="rounded-xl"
-                  src={profile?.avatar_url ?? undefined}
-                  alt={memberDisplayName}
-                  loading="lazy"
-                  referrerPolicy="no-referrer"
-                />
-                <AvatarFallback className="rounded-xl">
-                  {getAvatarInitials(profile?.display_name || organizationMemberTitle)}
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-medium">
-                  {memberDisplayName}
-                </div>
-                <div className="truncate text-xs text-muted-foreground">{organizationMemberTitle}</div>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {hiddenMembersCount > 0 ? (
-        <div className="text-xs text-muted-foreground">
-          +{hiddenMembersCount} חברים נוספים לא הוצגו ברשימה הזו
+    <div className="space-y-3">
+      <div className="rounded-2xl border border-border/60 bg-background/80 p-2">
+        <div className="mb-2 flex items-center justify-between gap-3 px-2 py-1">
+          <div className="text-xs text-muted-foreground">חברי צוות שמוצגים כעת</div>
+          <Badge variant="secondary" className="rounded-full px-2.5 py-0.5 text-[11px]">
+            {totalCount}
+          </Badge>
         </div>
-      ) : null}
+
+        <div className="space-y-2">
+          {members.map((organizationMember) => {
+            const profile = profilesById[organizationMember.user_id]
+            const organizationMemberTitle = organizationMember.title?.trim() || "חבר בארגון"
+            const memberDisplayName = profile?.display_name?.trim() || "חבר צוות"
+            const roleLabel = getOrganizationRoleLabel(organizationMember.role)
+
+            return (
+              <MemberCard
+                key={organizationMember.user_id}
+                name={memberDisplayName}
+                meta={organizationMemberTitle}
+                avatarUrl={profile?.avatar_url ?? undefined}
+                initialsSource={profile?.display_name || organizationMemberTitle}
+                badgeLabel={roleLabel}
+              />
+            )
+          })}
+
+          {hiddenMembersCount > 0 ? (
+            canManage && onManage ? (
+              <button
+                type="button"
+                className="relative block h-9 w-full overflow-hidden rounded-xl text-right"
+                onClick={onManage}
+              >
+                <ArrowDown className="pointer-events-none absolute inset-x-0 top-1 z-10 mx-auto size-3.5 animate-bounce text-muted-foreground/80" />
+                <MemberCard
+                  name="חברים נוספים"
+                  meta="הרשימה המלאה זמינה בעמוד הצוות"
+                  initialsSource="..."
+                  className="border-border/60 bg-muted/15 opacity-75 transition-opacity hover:opacity-95"
+                  avatarClassName="size-10"
+                />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-background via-background/80 to-transparent" />
+                <span className="sr-only">לעמוד הצוות</span>
+              </button>
+            ) : (
+              <div className="relative h-9 overflow-hidden rounded-xl">
+                <ArrowDown className="pointer-events-none absolute inset-x-0 top-1 z-10 mx-auto size-3.5 animate-bounce text-muted-foreground/80" />
+                <MemberCard
+                  name="חברים נוספים"
+                  meta="יש עוד חברים ברשימה"
+                  initialsSource="..."
+                  className="border-border/60 bg-muted/15 opacity-70"
+                  avatarClassName="size-10"
+                />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-background via-background/80 to-transparent" />
+              </div>
+            )
+          ) : null}
+        </div>
+      </div>
     </div>
   )
 }

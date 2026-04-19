@@ -165,9 +165,15 @@
   }
 
   body[data-scroll-locked] {
-    padding-right: 0 !important;
-    margin-right: 0 !important;
-    margin-left: 0 !important;
+    margin: 0;
+  }
+
+  body[data-scroll-locked] [data-slot="sidebar-container"][data-side="right"] {
+    right: var(--removed-body-scroll-bar-size, 0px);
+  }
+
+  body[data-scroll-locked] [data-slot="sidebar-container"][data-side="left"] {
+    left: var(--removed-body-scroll-bar-size, 0px);
   }
 }
 
