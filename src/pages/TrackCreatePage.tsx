@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react"
+﻿import { useEffect, useMemo, useState, type CSSProperties } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { CircleAlert, MapPinned, PlusCircle, Route, ShieldCheck } from "lucide-react"
 
@@ -167,10 +167,10 @@ const buildTrackName = ({
   point: PointRecord | null
   refId: number
 }) => {
-  const trackTypeLabel = trackType?.name?.trim() || "מסלול"
-  const pointLabel = point?.name?.trim() || `נקודה #${point?.id ?? "—"}`
+  const trackTypeLabel = trackType?.name?.trim() || "×ž×¡×œ×•×œ"
+  const pointLabel = point?.name?.trim() || `× ×§×•×“×” #${point?.id ?? "â€”"}`
 
-  return `${trackTypeLabel} · ${pointLabel} · #${refId}`
+  return `${trackTypeLabel} Â· ${pointLabel} Â· #${refId}`
 }
 
 const buildStoredFieldValue = (field: FormField, value: unknown) => {
@@ -331,7 +331,7 @@ export default function TrackCreatePage() {
 
     const loadPage = async () => {
       if (organizationIdFromRoute === null || pointIdFromRoute === null) {
-        setError("כתובת יצירת המסלול אינה תקינה.")
+        setError("×›×ª×•×‘×ª ×™×¦×™×¨×ª ×”×ž×¡×œ×•×œ ××™× ×” ×ª×§×™× ×”.")
         setLoading(false)
         setLoadingPermissions(false)
         return
@@ -395,7 +395,7 @@ export default function TrackCreatePage() {
           orgPermissionError: orgPermissionResult.error,
           pointPermissionError: pointPermissionResult.error,
         })
-        setError("לא הצלחנו לטעון את דף יצירת המסלול כרגע.")
+        setError("×œ× ×”×¦×œ×—× ×• ×œ×˜×¢×•×Ÿ ××ª ×“×£ ×™×¦×™×¨×ª ×”×ž×¡×œ×•×œ ×›×¨×’×¢.")
         setLoading(false)
         setLoadingPermissions(false)
         return
@@ -403,7 +403,7 @@ export default function TrackCreatePage() {
 
       const nextPoint = pointResult.data
       if (!nextPoint || nextPoint.organization_id !== organizationIdFromRoute) {
-        setError("הנקודה הזו לא שייכת לארגון שנבחר.")
+        setError("×”× ×§×•×“×” ×”×–×• ×œ× ×©×™×™×›×ª ×œ××¨×’×•×Ÿ ×©× ×‘×—×¨.")
         setLoading(false)
         setLoadingPermissions(false)
         return
@@ -478,9 +478,9 @@ export default function TrackCreatePage() {
         if (field.type === "nested_multi_select") {
           const groupedValue = value as Record<string, string[]>
           const hasSelection = Object.values(groupedValue ?? {}).some((items) => items.length > 0)
-          if (!hasSelection) return `יש למלא את השדה "${field.label}".`
+          if (!hasSelection) return `×™×© ×œ×ž×œ× ××ª ×”×©×“×” "${field.label}".`
         } else if (!String(value ?? "").trim()) {
-          return `יש למלא את השדה "${field.label}".`
+          return `×™×© ×œ×ž×œ× ××ª ×”×©×“×” "${field.label}".`
         }
       }
     }
@@ -527,7 +527,7 @@ export default function TrackCreatePage() {
 
     if (insertError || !insertedRecord) {
       console.error("Error creating tracking record:", insertError)
-      setError("לא הצלחנו ליצור את המסלול כרגע.")
+      setError("×œ× ×”×¦×œ×—× ×• ×œ×™×¦×•×¨ ××ª ×”×ž×¡×œ×•×œ ×›×¨×’×¢.")
       setSaving(false)
       return
     }
@@ -588,7 +588,7 @@ export default function TrackCreatePage() {
       <AppSidebar side="right" variant="inset" />
       <SidebarInset>
         <SiteHeader
-          title="יצירת מסלול"
+          title="×™×¦×™×¨×ª ×ž×¡×œ×•×œ"
           organizations={organizationOptions}
           selectedOrganizationId={selectedOrganization?.id.toString()}
           onOrganizationChange={handleOrganizationChange}
@@ -608,7 +608,7 @@ export default function TrackCreatePage() {
             ) : error && !point ? (
               <Alert variant="destructive">
                 <CircleAlert className="size-4" />
-                <AlertTitle>יצירת מסלול אינה זמינה</AlertTitle>
+                <AlertTitle>×™×¦×™×¨×ª ×ž×¡×œ×•×œ ××™× ×” ×–×ž×™× ×”</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             ) : (
@@ -617,17 +617,17 @@ export default function TrackCreatePage() {
                   <InfoPanel>
                     <InfoPanelHeader
                       icon={PlusCircle}
-                      title={selectedTrackType?.name?.trim() || "מסלול חדש"}
+                      title={selectedTrackType?.name?.trim() || "×ž×¡×œ×•×œ ×—×“×©"}
                       description={
                         point?.notes?.trim() ||
-                        "פתיחת רשומת מסלול חדשה בתוך הנקודה שנבחרה."
+                        "×¤×ª×™×—×ª ×¨×©×•×ž×ª ×ž×¡×œ×•×œ ×—×“×©×” ×‘×ª×•×š ×”× ×§×•×“×” ×©× ×‘×—×¨×”."
                       }
                       badge={
                         <Badge
                           variant={canCreateTrack ? "default" : "outline"}
                           className="rounded-full"
                         >
-                          {canCreateTrack ? "ניתן ליצירה" : "ללא הרשאה"}
+                          {canCreateTrack ? "× ×™×ª×Ÿ ×œ×™×¦×™×¨×”" : "×œ×œ× ×”×¨×©××”"}
                         </Badge>
                       }
                     />
@@ -636,52 +636,179 @@ export default function TrackCreatePage() {
                       <InfoPanelStats>
                         <InfoPanelStat
                           icon={Route}
-                          label="סקשנים בטופס"
+                          label="×¡×§×©× ×™× ×‘×˜×•×¤×¡"
                           value={formSections.length}
-                          description="מספר אזורי הקלט שהוגדרו למסלול הזה"
+                          description="×ž×¡×¤×¨ ××–×•×¨×™ ×”×§×œ×˜ ×©×”×•×’×“×¨×• ×œ×ž×¡×œ×•×œ ×”×–×”"
                         />
                         <InfoPanelStat
                           icon={ShieldCheck}
-                          label="שדות חובה"
+                          label="×©×“×•×ª ×—×•×‘×”"
                           value={totalRequiredFields}
-                          description="שדות שחייבים מילוי לפני פתיחת הרשומה"
+                          description="×©×“×•×ª ×©×—×™×™×‘×™× ×ž×™×œ×•×™ ×œ×¤× ×™ ×¤×ª×™×—×ª ×”×¨×©×•×ž×”"
                         />
                         <InfoPanelStat
                           icon={MapPinned}
-                          label="SLA פתיחה"
+                          label="SLA ×¤×ª×™×—×”"
                           value={formatMinutesLabel(Number(trackSlaMinutes) || 0)}
                           description={
                             slaMode === "derived"
-                              ? "המערכת תוסיף modifiers מהצמתים לאורך המסלול"
-                              : "המסלול יעבוד עם SLA ידני קבוע"
+                              ? "×”×ž×¢×¨×›×ª ×ª×•×¡×™×£ modifiers ×ž×”×¦×ž×ª×™× ×œ××•×¨×š ×”×ž×¡×œ×•×œ"
+                              : "×”×ž×¡×œ×•×œ ×™×¢×‘×•×“ ×¢× SLA ×™×“× ×™ ×§×‘×•×¢"
                           }
                         />
                       </InfoPanelStats>
 
-                      <InfoPanelSection title="הקשר פתיחה">
+                      <InfoPanelSection title="×”×§×©×¨ ×¤×ª×™×—×”">
                         <InfoPanelDetailList>
                           <InfoPanelDetail
-                            label="ארגון"
+                            label="××¨×’×•×Ÿ"
                             value={
                               selectedOrganization?.name?.trim() ||
-                              `ארגון #${selectedOrganization?.id ?? "—"}`
+                              `××¨×’×•×Ÿ #${selectedOrganization?.id ?? "â€”"}`
                             }
                           />
                           <InfoPanelDetail
-                            label="נקודה"
-                            value={point?.name?.trim() || `Point #${point?.id ?? "—"}`}
+                            label="× ×§×•×“×”"
+                            value={point?.name?.trim() || `Point #${point?.id ?? "â€”"}`}
                           />
                           <InfoPanelDetail
-                            label="צומת פתיחה"
-                            value={initialNodeTitle || "לא הוגדר"}
+                            label="×¦×•×ž×ª ×¤×ª×™×—×”"
+                            value={initialNodeTitle || "×œ× ×”×•×’×“×¨"}
                           />
                         </InfoPanelDetailList>
                       </InfoPanelSection>
 
-                      <InfoPanelSection title="הגדרת המסלול">
+                      <InfoPanelSection title="×”×’×“×¨×ª ×”×ž×¡×œ×•×œ">
                         <div className="space-y-4">
                           <div className="space-y-2">
-                            <div className="text-sm font-medium">סוג מסלול</div>
+                            <div className="text-sm font-medium">×¡×•×’ ×ž×¡×œ×•×œ</div>
+                            <Select value={selectedTrackTypeId} onValueChange={setSelectedTrackTypeId}>
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder="×‘×—×¨×• ×¡×•×’ ×ž×¡×œ×•×œ" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {trackTypes.map((trackType) => (
+                                  <SelectItem key={trackType.id} value={trackType.id.toString()}>
+                                    {trackType.name?.trim() || `Track type #${trackType.id}`}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <div className="text-sm font-medium">×ž×¦×‘ SLA</div>
+                            <Select
+                              value={slaMode}
+                              onValueChange={(value: "derived" | "manual") => setSlaMode(value)}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="derived">
+                                  Derived Â· SLA ×‘×¡×™×¡×™ ×¢× modifiers
+                                </SelectItem>
+                                <SelectItem value="manual">
+                                  Manual Â· SLA ×™×“× ×™ ×œ×œ× modifiers
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <div className="text-sm font-medium">SLA ×œ×ž×¡×œ×•×œ (×“×§×•×ª)</div>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={trackSlaMinutes}
+                              onChange={(event) => setTrackSlaMinutes(event.target.value)}
+                              disabled={!canCreateTrack || saving}
+                            />
+                            <div className="text-xs text-muted-foreground">
+                              {slaMode === "derived"
+                                ? "×”×ž×¢×¨×›×ª ×ª×™×§×— ×‘×—×©×‘×•×Ÿ ×’× SLA modifiers ×©×œ ×¦×ž×ª×™× ×§×™×¦×•× ×™×™×."
+                                : "×”×ž×¢×¨×›×ª ×ª×ª×¢×œ× ×ž-sla_modifier ×•×ª×©××™×¨ ××ª ×”×¢×¨×š ×”×™×“× ×™ ×›×ž×• ×©×”×•×."}
+                            </div>
+                          </div>
+                        </div>
+                      </InfoPanelSection>
+
+                      <InfoPanelSection
+                        icon={ShieldCheck}
+                        title="×”×¨×©××•×ª ×™×¦×™×¨×”"
+                        description={
+                          canCreateTrack
+                            ? "×™×¦×™×¨×ª ×ž×¡×œ×•×œ×™× ×–×ž×™× ×” ×œ×ž×©×ª×ž×©×™ ×”× ×§×•×“×” ×”×¤×¢×™×œ×™× ×•×œ×ž× ×”×œ×™ ×”××¨×’×•×Ÿ."
+                            : "×”×—×©×‘×•×Ÿ ×”×–×” ×™×›×•×œ ×œ×¦×¤×•×ª ×‘×ž×‘× ×”, ××‘×œ ××™× ×• ×ž×•×¨×©×” ×œ×¤×ª×•×— ×¨×©×•×ž×•×ª ×ž×¡×œ×•×œ ×—×“×©×•×ª."
+                        }
+                      />
+
+                      {error ? (
+                        <Alert variant="destructive">
+                          <CircleAlert className="size-4" />
+                          <AlertTitle>×œ× × ×™×ª×Ÿ ×œ×©×ž×•×¨ ×›×¨×’×¢</AlertTitle>
+                          <AlertDescription>{error}</AlertDescription>
+                        </Alert>
+                      ) : null}
+
+                      {!canCreateTrack && !loadingPermissions ? (
+                        <Alert variant="destructive">
+                          <CircleAlert className="size-4" />
+                          <AlertTitle>××™×Ÿ ×”×¨×©××” ×œ×™×¦×™×¨×ª ×ž×¡×œ×•×œ</AlertTitle>
+                          <AlertDescription>
+                            ×™×¦×™×¨×ª ×ž×¡×œ×•×œ×™× ×–×ž×™× ×” ×œ×ž×©×ª×ž×©×™ ×”× ×§×•×“×” ×”×¤×¢×™×œ×™× ×•×œ×ž× ×”×œ×™ ×”××¨×’×•×Ÿ.
+                          </AlertDescription>
+                        </Alert>
+                      ) : null}
+
+                      <Button
+                        className="w-full rounded-xl"
+                        onClick={handleSubmit}
+                        disabled={saving || !selectedTrackType || !canCreateTrack}
+                      >
+                        {saving ? "×©×•×ž×¨..." : "×™×¦×™×¨×ª ×ž×¡×œ×•×œ"}
+                      </Button>
+                    </InfoPanelBody>
+                  </InfoPanel>
+                </PageMainRail>
+
+                <PageMainContent>
+                  <Card className="border-border/70 shadow-none">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Route className="size-5" />
+                        ×˜×•×¤×¡ ×™×¦×™×¨×”
+                      </CardTitle>
+                      <CardDescription>
+                        ×”×˜×•×¤×¡ × ×‘× ×” ×ž×ª×•×š ×ž×‘× ×” ×”×ž×¡×œ×•×œ ×©× ×‘×—×¨, ×›×“×™ ×œ×©×ž×•×¨ ×¢×œ ×”×ª××ž×” ×ž×œ××” ×‘×™×Ÿ
+                        ×ª×‘× ×™×ª ×”×ž×¡×œ×•×œ ×œ×‘×™×Ÿ ×”×ž×™×“×¢ ×©× ×©×ž×¨ ×‘×¨×©×•×ž×”.
+                      </CardDescription>
+                    </CardHeader>
+
+                    <CardContent className="space-y-6">
+                      {!selectedTrackType ? (
+                        <Alert>
+                          <AlertTitle>××™×Ÿ ×¡×•×’ ×ž×¡×œ×•×œ ×–×ž×™×Ÿ</AlertTitle>
+                          <AlertDescription>
+                            ×œ× × ×ž×¦××• ×¡×•×’×™ ×ž×¡×œ×•×œ ×¤×¢×™×œ×™× ×¢×‘×•×¨ ×”××¨×’×•×Ÿ ×”×–×”.
+                          </AlertDescription>
+                        </Alert>
+                      ) : (
+                        <>
+                          <div className="rounded-3xl border border-border/60 bg-card/60 p-5">
+                            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                              <div className="space-y-1">
+                                <div className="font-medium">סוג המסלול</div>
+                                <div className="text-sm text-muted-foreground">
+                                  בחרו קודם את סוג המסלול. הטופס למטה יתעדכן מיד לפי הבחירה.
+                                </div>
+                              </div>
+                              <Badge variant="outline" className="rounded-full">
+                                {trackTypes.length}
+                              </Badge>
+                            </div>
+
                             <Select value={selectedTrackTypeId} onValueChange={setSelectedTrackTypeId}>
                               <SelectTrigger className="w-full">
                                 <SelectValue placeholder="בחרו סוג מסלול" />
@@ -696,179 +823,81 @@ export default function TrackCreatePage() {
                             </Select>
                           </div>
 
-                          <div className="space-y-2">
-                            <div className="text-sm font-medium">מצב SLA</div>
-                            <Select
-                              value={slaMode}
-                              onValueChange={(value: "derived" | "manual") => setSlaMode(value)}
+                          {formSections.map((section) => (
+                            <div
+                              key={section.id}
+                              className="rounded-3xl border border-border/60 bg-card/60 p-5"
                             >
-                              <SelectTrigger className="w-full">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="derived">
-                                  Derived · SLA בסיסי עם modifiers
-                                </SelectItem>
-                                <SelectItem value="manual">
-                                  Manual · SLA ידני ללא modifiers
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
+                              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                                <div className="font-medium">{section.title}</div>
+                                <Badge variant="outline" className="rounded-full">
+                                  {section.id}
+                                </Badge>
+                              </div>
 
-                          <div className="space-y-2">
-                            <div className="text-sm font-medium">SLA למסלול (דקות)</div>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={trackSlaMinutes}
-                              onChange={(event) => setTrackSlaMinutes(event.target.value)}
-                              disabled={!canCreateTrack || saving}
-                            />
-                            <div className="text-xs text-muted-foreground">
-                              {slaMode === "derived"
-                                ? "המערכת תיקח בחשבון גם SLA modifiers של צמתים קיצוניים."
-                                : "המערכת תתעלם מ-sla_modifier ותשאיר את הערך הידני כמו שהוא."}
-                            </div>
-                          </div>
-                        </div>
-                      </InfoPanelSection>
+                              <div className="space-y-4">
+                                {section.fields.map((field) => {
+                                  const sectionValues = formData[section.id] ?? {}
+                                  const value = sectionValues[field.id]
 
-                      <InfoPanelSection
-                        icon={ShieldCheck}
-                        title="הרשאות יצירה"
-                        description={
-                          canCreateTrack
-                            ? "יצירת מסלולים זמינה למשתמשי הנקודה הפעילים ולמנהלי הארגון."
-                            : "החשבון הזה יכול לצפות במבנה, אבל אינו מורשה לפתוח רשומות מסלול חדשות."
-                        }
-                      />
-
-                      {error ? (
-                        <Alert variant="destructive">
-                          <CircleAlert className="size-4" />
-                          <AlertTitle>לא ניתן לשמור כרגע</AlertTitle>
-                          <AlertDescription>{error}</AlertDescription>
-                        </Alert>
-                      ) : null}
-
-                      {!canCreateTrack && !loadingPermissions ? (
-                        <Alert variant="destructive">
-                          <CircleAlert className="size-4" />
-                          <AlertTitle>אין הרשאה ליצירת מסלול</AlertTitle>
-                          <AlertDescription>
-                            יצירת מסלולים זמינה למשתמשי הנקודה הפעילים ולמנהלי הארגון.
-                          </AlertDescription>
-                        </Alert>
-                      ) : null}
-
-                      <Button
-                        className="w-full rounded-xl"
-                        onClick={handleSubmit}
-                        disabled={saving || !selectedTrackType || !canCreateTrack}
-                      >
-                        {saving ? "שומר..." : "יצירת מסלול"}
-                      </Button>
-                    </InfoPanelBody>
-                  </InfoPanel>
-                </PageMainRail>
-
-                <PageMainContent>
-                  <Card className="border-border/70 shadow-none">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Route className="size-5" />
-                        טופס יצירה
-                      </CardTitle>
-                      <CardDescription>
-                        הטופס נבנה מתוך מבנה המסלול שנבחר, כדי לשמור על התאמה מלאה בין
-                        תבנית המסלול לבין המידע שנשמר ברשומה.
-                      </CardDescription>
-                    </CardHeader>
-
-                    <CardContent className="space-y-6">
-                      {!selectedTrackType ? (
-                        <Alert>
-                          <AlertTitle>אין סוג מסלול זמין</AlertTitle>
-                          <AlertDescription>
-                            לא נמצאו סוגי מסלול פעילים עבור הארגון הזה.
-                          </AlertDescription>
-                        </Alert>
-                      ) : (
-                        formSections.map((section) => (
-                          <div
-                            key={section.id}
-                            className="rounded-3xl border border-border/60 bg-card/60 p-5"
-                          >
-                            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-                              <div className="font-medium">{section.title}</div>
-                              <Badge variant="outline" className="rounded-full">
-                                {section.id}
-                              </Badge>
-                            </div>
-
-                            <div className="space-y-4">
-                              {section.fields.map((field) => {
-                                const sectionValues = formData[section.id] ?? {}
-                                const value = sectionValues[field.id]
-
-                                if (field.type === "text" || field.type === "phone") {
-                                  return (
-                                    <div key={field.id} className="space-y-2">
-                                      <div className="text-sm font-medium">
-                                        {field.label}
-                                        {field.required ? (
-                                          <span className="text-destructive"> *</span>
-                                        ) : null}
+                                  if (field.type === "text" || field.type === "phone") {
+                                    return (
+                                      <div key={field.id} className="space-y-2">
+                                        <div className="text-sm font-medium">
+                                          {field.label}
+                                          {field.required ? (
+                                            <span className="text-destructive"> *</span>
+                                          ) : null}
+                                        </div>
+                                        <Input
+                                          type={field.type === "phone" ? "tel" : "text"}
+                                          value={String(value ?? "")}
+                                          placeholder={field.placeholder}
+                                          onChange={(event) =>
+                                            handleFieldChange(
+                                              section.id,
+                                              field.id,
+                                              event.target.value
+                                            )
+                                          }
+                                        />
                                       </div>
-                                      <Input
-                                        type={field.type === "phone" ? "tel" : "text"}
-                                        value={String(value ?? "")}
-                                        placeholder={field.placeholder}
-                                        onChange={(event) =>
-                                          handleFieldChange(
-                                            section.id,
-                                            field.id,
-                                            event.target.value
-                                          )
-                                        }
-                                      />
-                                    </div>
-                                  )
-                                }
+                                    )
+                                  }
 
-                                if (field.type === "nested_multi_select") {
-                                  return (
-                                    <div key={field.id} className="space-y-2">
-                                      <div className="text-sm font-medium">
-                                        {field.label}
-                                        {field.required ? (
-                                          <span className="text-destructive"> *</span>
-                                        ) : null}
+                                  if (field.type === "nested_multi_select") {
+                                    return (
+                                      <div key={field.id} className="space-y-2">
+                                        <div className="text-sm font-medium">
+                                          {field.label}
+                                          {field.required ? (
+                                            <span className="text-destructive"> *</span>
+                                          ) : null}
+                                        </div>
+                                        <NestedMultiSelectField
+                                          field={field}
+                                          value={(value as Record<string, string[]>) ?? {}}
+                                          onChange={(nextValue) =>
+                                            handleFieldChange(section.id, field.id, nextValue)
+                                          }
+                                        />
                                       </div>
-                                      <NestedMultiSelectField
-                                        field={field}
-                                        value={(value as Record<string, string[]>) ?? {}}
-                                        onChange={(nextValue) =>
-                                          handleFieldChange(section.id, field.id, nextValue)
-                                        }
-                                      />
-                                    </div>
-                                  )
-                                }
+                                    )
+                                  }
 
-                                return (
-                                  <Alert key={field.id}>
-                                    <AlertTitle>שדה לא נתמך עדיין</AlertTitle>
-                                    <AlertDescription>
-                                      סוג השדה `{field.type}` עדיין לא נתמך בדף היצירה.
-                                    </AlertDescription>
-                                  </Alert>
-                                )
-                              })}
+                                  return (
+                                    <Alert key={field.id}>
+                                      <AlertTitle>×©×“×” ×œ× × ×ª×ž×š ×¢×“×™×™×Ÿ</AlertTitle>
+                                      <AlertDescription>
+                                        ×¡×•×’ ×”×©×“×” `{field.type}` ×¢×“×™×™×Ÿ ×œ× × ×ª×ž×š ×‘×“×£ ×”×™×¦×™×¨×”.
+                                      </AlertDescription>
+                                    </Alert>
+                                  )
+                                })}
+                              </div>
                             </div>
-                          </div>
-                        ))
+                          ))}
+                        </>
                       )}
                     </CardContent>
                   </Card>
@@ -881,3 +910,4 @@ export default function TrackCreatePage() {
     </SidebarProvider>
   )
 }
+

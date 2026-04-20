@@ -1,27 +1,21 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react"
+﻿import { useEffect, useMemo, useState, type CSSProperties } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import {
   ArrowRight,
-  Building2,
+  ArrowDown,
   CircleAlert,
   MapPinned,
   PencilLine,
   Route,
-  ShieldCheck,
   UserPlus,
-  Users,
 } from "lucide-react"
 
 import { AppSidebar } from "@/components/app-sidebar"
 import {
   InfoPanel,
   InfoPanelBody,
-  InfoPanelDetail,
-  InfoPanelDetailList,
   InfoPanelHeader,
   InfoPanelSection,
-  InfoPanelStat,
-  InfoPanelStats,
 } from "@/components/info-panel"
 import { MemberCard } from "@/components/member-card"
 import { PageBody, PageMainContent, PageMainLayout, PageMainRail } from "@/components/page-main-layout"
@@ -100,6 +94,8 @@ const getTrackRecordTitle = (track: TrackRecord) =>
 
 const getStatusLabel = (status: string | null | undefined) =>
   status === "active" ? "פעיל" : status?.trim() || "לא פעיל"
+
+const POINT_MEMBER_PREVIEW_LIMIT = 3
 
 export default function PointPage() {
   const { user } = useAuth()
@@ -206,14 +202,7 @@ export default function PointPage() {
       setMembersError(null)
       setLoadingPermissions(true)
 
-      const [
-        tracksResult,
-        membersResult,
-        orgPermissionResult,
-        pointPermissionResult,
-        pointAccessResult,
-        pointResult,
-      ] = await Promise.all([
+      const [tracksResult, membersResult, orgPermissionResult, pointPermissionResult, pointAccessResult, pointResult] = await Promise.all([
         supabase
           .from("tracking_records")
           .select("id, ref_id, point_id, track_type_id, name, status, current_step, sla, sla_mode, data, notes, track_type:track_types(id, name, status, sla, form_schema, track_schema, vesrion)")
@@ -302,12 +291,7 @@ export default function PointPage() {
             slaMode: trackRow.sla_mode,
             data: trackRow.data && typeof trackRow.data === "object" ? (trackRow.data as Record<string, unknown>) : null,
             notes: trackRow.notes,
-            trackType: trackType
-              ? {
-                  ...trackType,
-                  track_schema: normalizedTrackSchema,
-                }
-              : null,
+            trackType: trackType ? { ...trackType, track_schema: normalizedTrackSchema } : null,
             currentNode,
             nextConnections: currentNode?.next_nodes ?? [],
             url: `/${getOrganizationSegment(selectedOrganization)}/${getPointSegment(point)}/track/${trackSegment}`,
@@ -404,12 +388,14 @@ export default function PointPage() {
     navigate(`/${getOrganizationSegment(nextOrganization)}`)
   }
 
+  const navigateToPointTarget = (suffix: "team" | "edit" | "track/new") => {
+    if (!currentPoint || !selectedOrganization) return
+    navigate(`/${getOrganizationSegment(selectedOrganization)}/${getPointSegment(currentPoint)}/${suffix}`)
+  }
+
   return (
     <SidebarProvider style={{ "--sidebar-width": "calc(var(--spacing) * 74)", "--header-height": "calc(var(--spacing) * 13)" } as CSSProperties}>
-      <AppSidebar
-        side="right"
-        variant="inset"
-      />
+      <AppSidebar side="right" variant="inset" />
       <SidebarInset>
         <SiteHeader
           title="עמוד נקודה"
@@ -421,286 +407,159 @@ export default function PointPage() {
           <div className="@container/main flex flex-1 flex-col">
             <div className="page-stack" dir="rtl">
               {loadingOrganizations || loadingPoint ? (
-                <PageMainLayout>
-                    <PageMainRail>
-                    <InfoPanel>
-                      <CardHeader>
-                        <Skeleton className="h-8 w-40" />
-                        <Skeleton className="h-4 w-full" />
-                        <Skeleton className="h-4 w-5/6" />
-                      </CardHeader>
-                      <CardContent className="space-y-5">
-                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                          <Skeleton className="h-24 w-full rounded-xl" />
-                          <Skeleton className="h-24 w-full rounded-xl" />
-                        </div>
-                        <Skeleton className="h-28 w-full rounded-xl" />
-                        <Skeleton className="h-28 w-full rounded-xl" />
-                      </CardContent>
-                    </InfoPanel>
-                    </PageMainRail>
-                    <PageMainContent>
-                      <Card className="rounded-[2rem]">
-                        <CardHeader><Skeleton className="h-6 w-32" /><Skeleton className="h-4 w-64" /></CardHeader>
-                        <CardContent><div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3"><Skeleton className="h-40 w-full" /><Skeleton className="h-40 w-full" /><Skeleton className="h-40 w-full" /></div></CardContent>
-                      </Card>
-                      <Card className="rounded-[2rem]">
-                        <CardHeader><Skeleton className="h-6 w-32" /><Skeleton className="h-4 w-56" /></CardHeader>
-                        <CardContent><div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3"><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /></div></CardContent>
-                      </Card>
-                    </PageMainContent>
-                </PageMainLayout>
+                <PointPageSkeleton />
               ) : organizationsError || pointError ? (
-                <div>
-                  <Alert variant="destructive">
-                    <CircleAlert className="size-4" />
-                    <AlertTitle>הנקודה לא זמינה</AlertTitle>
-                    <AlertDescription>{pointError || organizationsError || "לא הצלחנו לטעון את הנקודה הזו כרגע."}</AlertDescription>
-                  </Alert>
-                </div>
+                <Alert variant="destructive">
+                  <CircleAlert className="size-4" />
+                  <AlertTitle>הנקודה לא זמינה</AlertTitle>
+                  <AlertDescription>{pointError || organizationsError || "לא הצלחנו לטעון את הנקודה הזו כרגע."}</AlertDescription>
+                </Alert>
               ) : !selectedOrganization ? (
-                <div>
-                  <Alert variant="destructive">
-                    <CircleAlert className="size-4" />
-                    <AlertTitle>הנקודה לא זמינה</AlertTitle>
-                    <AlertDescription>לא הצלחנו לזהות את הארגון עבור הנקודה הזו.</AlertDescription>
-                  </Alert>
-                </div>
+                <Alert variant="destructive">
+                  <CircleAlert className="size-4" />
+                  <AlertTitle>הנקודה לא זמינה</AlertTitle>
+                  <AlertDescription>לא הצלחנו לזהות את הארגון עבור הנקודה הזו.</AlertDescription>
+                </Alert>
               ) : (
                 <PageMainLayout>
-                    <PageMainRail>
-                    <InfoPanel>
+                  <PageMainRail>
+                    <InfoPanel className="xl:static">
                       <InfoPanelHeader
                         icon={MapPinned}
                         title={pointName || `נקודה #${pointIdFromRoute ?? "—"}`}
                         description={pointNotes || "עדיין לא נוספו הערות לנקודה הזו."}
                         badge={
-                          <Badge
-                            variant={pointStatus === "active" ? "default" : "outline"}
-                            className="rounded-full"
-                          >
+                          <Badge variant={pointStatus === "active" ? "default" : "outline"} className="rounded-full">
                             {getStatusLabel(pointStatus)}
                           </Badge>
                         }
                       />
-
                       <InfoPanelBody>
-                        <InfoPanelStats>
-                          <InfoPanelStat
-                            icon={Route}
-                            label="מסלולים"
-                            value={tracks.length}
-                            description="רשומות מסלול פעילות בנקודה הזו"
-                          />
-                          <InfoPanelStat
-                            icon={Users}
-                            label="חברים"
-                            value={members.length}
-                            description="משויכים כרגע לנקודה הזו"
-                          />
-                        </InfoPanelStats>
-
                         <InfoPanelSection
-                          icon={Building2}
-                          title="ארגון"
-                          description="הנקודה מוצגת בתוך ההקשר הארגוני שלה."
+                          title="פעולות נקודה"
+                          description="כל מה שקשור לניהול הנקודה מרוכז כאן, בלי להעמיס על התוכן הראשי."
                         >
-                          <InfoPanelDetailList>
-                            <InfoPanelDetail
-                              label="שם הארגון"
-                              value={selectedOrganization.name?.trim() || `ארגון #${selectedOrganization.id}`}
-                            />
-                            <InfoPanelDetail
-                              label="סטטוס ארגון"
-                              value={getStatusLabel(selectedOrganization.status)}
-                            />
-                          </InfoPanelDetailList>
+                          <div className="grid gap-2">
+                            <Button
+                              variant="outline"
+                              className="w-full justify-start rounded-xl"
+                              disabled={!canCreateTrack || !currentPoint || loadingPermissions}
+                              onClick={() => navigateToPointTarget("track/new")}
+                            >
+                              <Route className="size-4" />
+                              יצירת מסלול
+                            </Button>
+                            <Button
+                              variant="outline"
+                              className="w-full justify-start rounded-xl"
+                              disabled={!canManageTeam || !currentPoint || loadingPermissions}
+                              onClick={() => navigateToPointTarget("team")}
+                            >
+                              <UserPlus className="size-4" />
+                              ניהול צוות נקודה
+                            </Button>
+                            <Button
+                              variant="outline"
+                              className="w-full justify-start rounded-xl"
+                              disabled={!canEdit || !currentPoint || loadingPermissions}
+                              onClick={() => navigateToPointTarget("edit")}
+                            >
+                              <PencilLine className="size-4" />
+                              עריכת נקודה
+                            </Button>
+                          </div>
                         </InfoPanelSection>
 
                         <InfoPanelSection
-                          icon={ShieldCheck}
-                          title="גישה וניהול"
-                          description={
-                            canEdit || canManageTeam
-                              ? "ניהול הצוות ועריכת הנקודה נשארים בעמודים נפרדים כדי לשמור על תצוגת הקריאה נקייה ופשוטה."
-                              : "ניהול ועריכה זמינים רק לבעלי ומנהלי הארגון, או למנהלי הנקודה."
-                          }
-                          action={
-                            canEdit || canManageTeam ? (
-                              <div className="flex flex-wrap justify-end gap-2">
-                                {canManageTeam ? (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="rounded-xl"
-                                    onClick={() =>
-                                      navigate(
-                                        `/${getOrganizationSegment(selectedOrganization)}/${getPointSegment(
-                                          currentPoint ?? {
-                                            id: pointIdFromRoute ?? 0,
-                                            organization_id: selectedOrganization.id,
-                                            name: pointName || null,
-                                            notes: pointNotes || null,
-                                            status: pointStatus,
-                                          }
-                                        )}/team`
-                                      )
-                                    }
-                                    disabled={loadingPermissions || !currentPoint}
-                                  >
-                                    <UserPlus className="size-4" />
-                                    ניהול צוות נקודה
-                                  </Button>
-                                ) : null}
-                                {canEdit ? (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="rounded-xl"
-                                    onClick={() =>
-                                      navigate(
-                                        `/${getOrganizationSegment(selectedOrganization)}/${getPointSegment(
-                                          currentPoint ?? {
-                                            id: pointIdFromRoute ?? 0,
-                                            organization_id: selectedOrganization.id,
-                                            name: pointName || null,
-                                            notes: pointNotes || null,
-                                            status: pointStatus,
-                                          }
-                                        )}/edit`
-                                      )
-                                    }
-                                    disabled={loadingPermissions || !currentPoint}
-                                  >
-                                    <PencilLine className="size-4" />
-                                    עריכת נקודה
-                                  </Button>
-                                ) : null}
-                              </div>
-                            ) : (
-                              <Badge variant="outline" className="rounded-full">
-                                קריאה בלבד
-                              </Badge>
-                            )
-                          }
-                        />
+                          title="חברי נקודה"
+                          description="תצוגה מקוצרת של הצוות הפעיל בנקודה הזו."
+                        >
+                          <PointMembersList
+                            members={members}
+                            loading={loadingMembers}
+                            error={membersError}
+                            canManage={canManageTeam}
+                            onManage={() => navigateToPointTarget("team")}
+                          />
+                        </InfoPanelSection>
                       </InfoPanelBody>
                     </InfoPanel>
-                    </PageMainRail>
+                  </PageMainRail>
 
-                    <PageMainContent>
-                      <Card className="overflow-hidden border-border/70 shadow-none">
-                        <CardHeader className="gap-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <CardTitle className="flex items-center gap-2"><Route className="size-5" />מסלולים</CardTitle>
-                              <CardDescription>כל מסלול נטען מרשומת מעקב חיה יחד עם סוג המסלול, השלב הנוכחי ואפשרויות ההמשך.</CardDescription>
-                            </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="rounded-[1rem]"
-                              disabled={!canCreateTrack}
-                              onClick={() =>
-                                navigate(
-                                  `/${getOrganizationSegment(selectedOrganization)}/${getPointSegment(
-                                    currentPoint ?? {
-                                      id: pointIdFromRoute ?? 0,
-                                      organization_id: selectedOrganization.id,
-                                      name: pointName || null,
-                                      notes: pointNotes || null,
-                                      status: pointStatus,
-                                    }
-                                  )}/track/new`
-                                )
-                              }
-                            >
-                              יצירת מסלול
-                            </Button>
+                  <PageMainContent>
+                    <Card className="overflow-hidden border-border/70 shadow-none">
+                      <CardHeader className="gap-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <CardTitle className="flex items-center gap-2"><Route className="size-5" />מסלולים</CardTitle>
+                            <CardDescription>רשומות המעקב הפעילות של הנקודה, במבנה תצוגה נקי וקצר.</CardDescription>
                           </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          {loadingTracks ? (
-                            <div className="grid gap-3 md:grid-cols-2"><Skeleton className="h-40 w-full" /><Skeleton className="h-40 w-full" /><Skeleton className="h-40 w-full" /><Skeleton className="h-40 w-full" /></div>
-                          ) : tracksError ? (
-                            <Alert variant="destructive"><AlertTitle>המסלולים לא זמינים</AlertTitle><AlertDescription>{tracksError}</AlertDescription></Alert>
-                          ) : tracks.length === 0 ? (
-                            <Alert><AlertTitle>אין עדיין מסלולים</AlertTitle><AlertDescription>לנקודה הזו עדיין אין רשומות מסלול גלויות עבור החשבון שלך.</AlertDescription></Alert>
-                          ) : (
-                            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-                              {tracks.map((track) => (
-                                <Card key={track.id} size="sm" className="border-border/70 shadow-none transition-colors hover:border-primary/35">
-                                  <CardHeader className="gap-2">
-                                    <div className="flex items-center justify-between gap-3">
-                                      <CardTitle className="truncate">{getTrackRecordTitle(track)}</CardTitle>
-                                      <Badge variant="outline" className="rounded-full uppercase">{track.status || "active"}</Badge>
+                          <Badge variant="outline" className="rounded-full">{tracks.length} מסלולים</Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {loadingTracks ? (
+                          <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3"><Skeleton className="h-56 w-full" /><Skeleton className="h-56 w-full" /><Skeleton className="h-56 w-full" /></div>
+                        ) : tracksError ? (
+                          <Alert variant="destructive"><AlertTitle>המסלולים לא זמינים</AlertTitle><AlertDescription>{tracksError}</AlertDescription></Alert>
+                        ) : tracks.length === 0 ? (
+                          <Alert><AlertTitle>אין עדיין מסלולים</AlertTitle><AlertDescription>לנקודה הזו עדיין אין רשומות מסלול גלויות עבור החשבון שלך.</AlertDescription></Alert>
+                        ) : (
+                          <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                            {tracks.map((track) => (
+                              <Card key={track.id} size="sm" className="point-entry-card overflow-hidden border-border/70 bg-card/95 shadow-none">
+                                <CardHeader className="gap-2 pb-2.5">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div className="min-w-0 space-y-1">
+                                      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                                        <Route className="size-3.5" />
+                                        מסלול
+                                      </div>
+                                      <CardTitle className="truncate text-base">{getTrackRecordTitle(track)}</CardTitle>
                                     </div>
-                                    <CardDescription className="space-y-1">
-                                      <div>סוג מסלול: {track.trackType?.name?.trim() || `סוג #${track.trackType?.id ?? "—"}`}</div>
-                                      <div>מספר ייחוס: {track.refId}</div>
-                                      <div>צומת נוכחי: {track.currentNode?.title || track.currentStepKey || "לא הוגדר"}</div>
-                                      <div>SLA: {formatMinutesLabel(track.sla ?? track.trackType?.sla ?? null)} · {track.slaMode === "manual" ? "Manual" : "Derived"}</div>
-                                    </CardDescription>
-                                  </CardHeader>
-                                  <CardContent className="space-y-4">
-                                    {track.currentNode?.description ? <div className="rounded-xl border border-border bg-muted/30 p-3 text-sm leading-6 text-muted-foreground">{track.currentNode.description}</div> : null}
-                                    {track.notes ? <div className="text-sm text-muted-foreground">{track.notes}</div> : null}
-                                    <div className="space-y-2">
-                                      <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">צעדי המשך זמינים</div>
-                                      {track.nextConnections.length === 0 ? (
-                                        <div className="text-sm text-muted-foreground">אין מעבר זמין לשלב הבא עבור המסלול הזה כרגע.</div>
-                                      ) : (
-                                        <div className="flex flex-wrap gap-2">
-                                          {track.nextConnections.map((transition) => (
-                                            <Badge key={transition.id} variant="secondary" className="gap-1 rounded-full px-3 py-1">
-                                              <ArrowRight className="size-3" />
-                                              {transition.label}
-                                            </Badge>
-                                          ))}
-                                        </div>
-                                      )}
+                                    <Badge variant="outline" className="shrink-0 rounded-full uppercase">{track.status || "active"}</Badge>
+                                  </div>
+                                  <CardDescription className="space-y-1 leading-6">
+                                    <div>סוג מסלול: {track.trackType?.name?.trim() || `סוג #${track.trackType?.id ?? "—"}`}</div>
+                                    <div>מספר ייחוס: {track.refId}</div>
+                                    <div>שלב נוכחי: {track.currentNode?.title || track.currentStepKey || "לא הוגדר"}</div>
+                                    <div>SLA: {formatMinutesLabel(track.sla ?? track.trackType?.sla ?? null)} · {track.slaMode === "manual" ? "ידני" : "נגזר"}</div>
+                                  </CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                  {track.currentNode?.description ? (
+                                    <div className="rounded-[1.1rem] border border-border/60 bg-linear-to-l from-muted/5 via-background to-background px-3 py-2.5 text-sm leading-6 text-muted-foreground">
+                                      {track.currentNode.description}
                                     </div>
-                                    <Button variant="outline" className="w-full rounded-[1rem]" onClick={() => navigate(track.url)}>
-                                      פתיחת מסלול
-                                    </Button>
-                                  </CardContent>
-                                </Card>
-                              ))}
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
+                                  ) : null}
+                                  <div className="rounded-[1.1rem] border border-border/60 bg-linear-to-l from-muted/5 via-background to-background px-3 py-2.5">
+                                    <div className="mb-2 text-sm font-medium">צעדי המשך זמינים</div>
+                                    {track.nextConnections.length === 0 ? (
+                                      <div className="text-sm text-muted-foreground">אין מעבר זמין לשלב הבא כרגע.</div>
+                                    ) : (
+                                      <div className="flex flex-wrap gap-2">
+                                        {track.nextConnections.map((transition) => (
+                                          <Badge key={transition.id} variant="secondary" className="gap-1 rounded-full px-3 py-1">
+                                            <ArrowRight className="size-3" />
+                                            {transition.label}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                  {track.notes ? <div className="line-clamp-2 text-sm text-muted-foreground">{track.notes}</div> : null}
+                                  <Button variant="outline" className="w-full rounded-xl" onClick={() => navigate(track.url)}>
+                                    פתיחת מסלול
+                                  </Button>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
 
-                      <Card className="overflow-hidden border-border/70 shadow-none">
-                        <CardHeader>
-                          <CardTitle className="flex items-center gap-2"><Users className="size-5" />חברי נקודה</CardTitle>
-                          <CardDescription>האנשים שמשויכים כרגע לנקודה הזו.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          {loadingMembers ? (
-                            <div className="grid gap-3 md:grid-cols-2"><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /></div>
-                          ) : membersError ? (
-                            <Alert variant="destructive"><AlertTitle>חברי הנקודה לא זמינים</AlertTitle><AlertDescription>{membersError}</AlertDescription></Alert>
-                          ) : members.length === 0 ? (
-                            <Alert><AlertTitle>אין עדיין חברים</AlertTitle><AlertDescription>לנקודה הזו עדיין אין חברים גלויים עבור החשבון שלך.</AlertDescription></Alert>
-                          ) : (
-                            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-                              {members.map((member) => (
-                                <MemberCard
-                                  key={`${member.point_id}-${member.user_id}`}
-                                  name={formatMemberName(member)}
-                                  meta={formatMemberMeta(member)}
-                                  avatarUrl={member.avatarUrl}
-                                  initialsSource={member.profile?.display_name || member.title}
-                                  badgeLabel={member.role || "member"}
-                                  className="border-border/70 bg-card transition-colors hover:border-primary/35"
-                                />
-                              ))}
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </PageMainContent>
+                  </PageMainContent>
                 </PageMainLayout>
               )}
             </div>
@@ -708,5 +567,147 @@ export default function PointPage() {
         </PageBody>
       </SidebarInset>
     </SidebarProvider>
+  )
+}
+
+function PointPageSkeleton() {
+  return (
+    <PageMainLayout>
+      <PageMainRail>
+        <div className="space-y-4">
+          <InfoPanel className="xl:static">
+            <CardHeader>
+              <Skeleton className="h-8 w-40" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-5/6" />
+            </CardHeader>
+            <CardContent className="pt-0" />
+          </InfoPanel>
+          <Card className="border-border/70 shadow-none">
+            <CardContent className="space-y-3 p-5">
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-10 w-full rounded-xl" />
+              <Skeleton className="h-10 w-full rounded-xl" />
+              <Skeleton className="h-10 w-full rounded-xl" />
+            </CardContent>
+          </Card>
+          <Card className="border-border/70 shadow-none">
+            <CardContent className="space-y-3 p-5">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-14 w-full rounded-xl" />
+              <Skeleton className="h-14 w-full rounded-xl" />
+              <Skeleton className="h-10 w-full rounded-xl" />
+            </CardContent>
+          </Card>
+        </div>
+      </PageMainRail>
+      <PageMainContent>
+        <Card className="border-border/70 shadow-none">
+          <CardHeader>
+            <Skeleton className="h-6 w-36" />
+            <Skeleton className="h-4 w-72" />
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+              <Skeleton className="h-56 w-full rounded-2xl" />
+              <Skeleton className="h-56 w-full rounded-2xl" />
+              <Skeleton className="h-56 w-full rounded-2xl" />
+            </div>
+          </CardContent>
+        </Card>
+      </PageMainContent>
+    </PageMainLayout>
+  )
+}
+
+function PointMembersList({
+  members,
+  loading,
+  error,
+  canManage,
+  onManage,
+}: {
+  members: PointMember[]
+  loading: boolean
+  error: string | null
+  canManage: boolean
+  onManage: () => void
+}) {
+  if (loading) {
+    return (
+      <div className="space-y-2">
+        <Skeleton className="h-14 w-full rounded-xl" />
+        <Skeleton className="h-14 w-full rounded-xl" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <Alert variant="destructive">
+        <AlertTitle>חברי הנקודה לא זמינים</AlertTitle>
+        <AlertDescription>{error}</AlertDescription>
+      </Alert>
+    )
+  }
+
+  if (members.length === 0) {
+    return (
+      <Alert>
+        <AlertTitle>אין עדיין חברים</AlertTitle>
+        <AlertDescription>לנקודה הזו עדיין אין חברים גלויים עבור החשבון שלך.</AlertDescription>
+      </Alert>
+    )
+  }
+
+  const displayedMembers = members.slice(0, POINT_MEMBER_PREVIEW_LIMIT)
+  const hiddenMembersCount = Math.max(members.length - displayedMembers.length, 0)
+
+  return (
+    <div className="space-y-2">
+      {displayedMembers.map((member) => (
+        <MemberCard
+          key={`${member.point_id}-${member.user_id}`}
+          name={formatMemberName(member)}
+          meta={formatMemberMeta(member)}
+          avatarUrl={member.avatarUrl}
+          initialsSource={member.profile?.display_name || member.title}
+          badgeLabel={member.role || "member"}
+          className="border-border/70 bg-card"
+        />
+      ))}
+
+      {hiddenMembersCount > 0 ? (
+        canManage ? (
+          <button
+            type="button"
+            className="relative block h-9 w-full overflow-hidden rounded-xl text-right"
+            onClick={onManage}
+          >
+            <ArrowDown className="pointer-events-none absolute inset-x-0 top-1 z-10 mx-auto size-3.5 animate-bounce text-muted-foreground/80" />
+            <MemberCard
+              name="חברים נוספים"
+              meta="הרשימה המלאה זמינה בעמוד צוות הנקודה"
+              initialsSource="..."
+              className="border-border/60 bg-muted/15 opacity-75 transition-opacity hover:opacity-95"
+            />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-background via-background/80 to-transparent" />
+          </button>
+        ) : (
+          <div className="relative h-9 overflow-hidden rounded-xl">
+            <ArrowDown className="pointer-events-none absolute inset-x-0 top-1 z-10 mx-auto size-3.5 animate-bounce text-muted-foreground/80" />
+            <MemberCard
+              name="חברים נוספים"
+              meta="יש עוד חברים ברשימה"
+              initialsSource="..."
+              className="border-border/60 bg-muted/15 opacity-70"
+            />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-background via-background/80 to-transparent" />
+          </div>
+        )
+      ) : null}
+    </div>
   )
 }

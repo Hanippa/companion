@@ -6,10 +6,7 @@ import { AppSidebar } from "@/components/app-sidebar"
 import {
   InfoPanel,
   InfoPanelBody,
-  InfoPanelDetail,
-  InfoPanelDetailList,
   InfoPanelHeader,
-  InfoPanelSection,
 } from "@/components/info-panel"
 import { MemberCard } from "@/components/member-card"
 import { PageBody, PageMainContent, PageMainLayout, PageMainRail } from "@/components/page-main-layout"
@@ -381,21 +378,14 @@ export default function OrganizationTeamPage() {
               <PageMainLayout>
                 <PageMainRail>
                   <div className="space-y-4">
-                    <InfoPanel>
+                    <InfoPanel className="xl:static">
                       <InfoPanelHeader
                         icon={ShieldUser}
                         title={selectedOrganization.name?.trim() || `ארגון #${selectedOrganization.id}`}
                         description={selectedOrganization.notes?.trim() || "ניהול חברי הארגון והרשאותיהם."}
                         badge={<Badge variant={canManage ? "default" : "outline"}>{canManage ? "בעלים" : "קריאה בלבד"}</Badge>}
                       />
-                      <InfoPanelBody>
-                        <InfoPanelSection title="הקשר">
-                          <InfoPanelDetailList>
-                            <InfoPanelDetail label="חברי ארגון פעילים" value={members.length} />
-                            <InfoPanelDetail label="גישה" value={canManage ? "ניהול מלא" : "צפייה בלבד"} />
-                          </InfoPanelDetailList>
-                        </InfoPanelSection>
-                      </InfoPanelBody>
+                      <InfoPanelBody className="pt-0" />
                     </InfoPanel>
 
                     <Card className="border-border/70 shadow-none">
@@ -443,10 +433,6 @@ export default function OrganizationTeamPage() {
                             </div>
 
                             <div className="grid gap-4">
-                              <div className="space-y-2">
-                                <label className="text-sm font-medium">אימייל</label>
-                                <Input value="שינוי אימייל יתווסף בהמשך דרך flow ייעודי" disabled readOnly />
-                              </div>
                               <div className="space-y-2">
                                 <label className="text-sm font-medium">שם מלא</label>
                                 <Input value={memberDisplayName} onChange={(event) => setMemberDisplayName(event.target.value)} disabled={!canManage || memberSaving || memberRemoving} />

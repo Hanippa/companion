@@ -1,18 +1,9 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react"
+﻿import { useEffect, useMemo, useState, type CSSProperties } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { CircleAlert, MapPinned, ShieldCheck, UserPlus, Users, Users2 } from "lucide-react"
+import { CircleAlert, MapPinned, UserPlus, Users2 } from "lucide-react"
 
 import { AppSidebar } from "@/components/app-sidebar"
-import {
-  InfoPanel,
-  InfoPanelBody,
-  InfoPanelDetail,
-  InfoPanelDetailList,
-  InfoPanelHeader,
-  InfoPanelSection,
-  InfoPanelStat,
-  InfoPanelStats,
-} from "@/components/info-panel"
+import { InfoPanel, InfoPanelBody, InfoPanelHeader } from "@/components/info-panel"
 import { MemberCard } from "@/components/member-card"
 import { PageBody, PageMainContent, PageMainLayout, PageMainRail } from "@/components/page-main-layout"
 import { SiteHeader } from "@/components/site-header"
@@ -21,7 +12,13 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { useAuth } from "@/contexts/AuthContext"
@@ -45,14 +42,6 @@ type PointRecord = {
   status: string | null
 }
 
-type OrganizationMemberRow = {
-  organization_id: number
-  user_id: string
-  role: string | null
-  status: string | null
-  title?: string | null
-}
-
 type PointMemberRow = {
   point_id: number
   user_id: string
@@ -67,11 +56,7 @@ type ProfileSummary = {
   avatar_url: string | null
 }
 
-type TeamMember = {
-  user_id: string
-  role: string | null
-  status: string | null
-  title?: string | null
+type TeamMember = PointMemberRow & {
   profile: ProfileSummary | null
 }
 
@@ -81,11 +66,10 @@ const ROLE_OPTIONS = [
   { value: "admin", label: "מנהל נקודה" },
 ]
 
-const formatMemberName = (member: TeamMember) =>
-  member.profile?.display_name?.trim() || member.title?.trim() || "משתמש ארגוני"
-
-const formatMemberMeta = (member: TeamMember) =>
-  [member.title?.trim(), member.status?.trim()].filter(Boolean).join(" · ") || "משויך לנקודה"
+const STATUS_OPTIONS = [
+  { value: "active", label: "פעיל" },
+  { value: "inactive", label: "לא פעיל" },
+]
 
 export default function PointTeamPage() {
   const { user } = useAuth()
@@ -97,25 +81,22 @@ export default function PointTeamPage() {
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [loadingOrganizations, setLoadingOrganizations] = useState(true)
   const [organizationsError, setOrganizationsError] = useState<string | null>(null)
-
   const [point, setPoint] = useState<PointRecord | null>(null)
   const [loadingPoint, setLoadingPoint] = useState(true)
   const [pointError, setPointError] = useState<string | null>(null)
-
   const [members, setMembers] = useState<TeamMember[]>([])
-  const [availableMembers, setAvailableMembers] = useState<TeamMember[]>([])
   const [loadingMembers, setLoadingMembers] = useState(true)
   const [membersError, setMembersError] = useState<string | null>(null)
-
   const [canManageTeam, setCanManageTeam] = useState(false)
   const [permissionLabel, setPermissionLabel] = useState("קריאה בלבד")
-
-  const [selectedUserId, setSelectedUserId] = useState("")
-  const [title, setTitle] = useState("")
-  const [role, setRole] = useState("member")
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
-  const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null)
+  const [memberTitle, setMemberTitle] = useState("")
+  const [memberRole, setMemberRole] = useState("member")
+  const [memberStatus, setMemberStatus] = useState("active")
+  const [memberSaveError, setMemberSaveError] = useState<string | null>(null)
+  const [memberSaveMessage, setMemberSaveMessage] = useState<string | null>(null)
+  const [memberSaving, setMemberSaving] = useState(false)
+  const [memberRemoving, setMemberRemoving] = useState(false)
 
   useEffect(() => {
     let isMounted = true
@@ -190,113 +171,79 @@ export default function PointTeamPage() {
       setMembersError(null)
 
       try {
-        const [pointResult, pointMembersResult, organizationMembersResult, orgPermissionResult, pointPermissionResult] =
-          await Promise.all([
-            supabase
-              .from("points")
-              .select("id, organization_id, name, notes, status")
-              .eq("id", pointIdFromRoute)
-              .single<PointRecord>(),
-            supabase
-              .from("point_users")
-              .select("point_id, user_id, role, status, title")
-              .eq("point_id", pointIdFromRoute)
-              .eq("status", "active")
-              .order("user_id", { ascending: true }),
-            supabase
-              .from("organization_users")
-              .select("organization_id, user_id, role, status, title")
-              .eq("organization_id", selectedOrganization.id)
-              .eq("status", "active")
-              .order("user_id", { ascending: true }),
-            supabase
-              .from("organization_users")
-              .select("role")
-              .eq("organization_id", selectedOrganization.id)
-              .eq("user_id", user.id)
-              .eq("status", "active")
-              .in("role", ["admin", "owner"]),
-            supabase
-              .from("point_users")
-              .select("role")
-              .eq("point_id", pointIdFromRoute)
-              .eq("user_id", user.id)
-              .eq("status", "active")
-              .eq("role", "admin"),
-          ])
+        const [
+          pointResult,
+          pointMembersResult,
+          orgPermissionResult,
+          pointPermissionResult,
+        ] = await Promise.all([
+          supabase
+            .from("points")
+            .select("id, organization_id, name, notes, status")
+            .eq("id", pointIdFromRoute)
+            .single<PointRecord>(),
+          supabase
+            .from("point_users")
+            .select("point_id, user_id, role, status, title")
+            .eq("point_id", pointIdFromRoute)
+            .eq("status", "active")
+            .order("user_id", { ascending: true }),
+          supabase
+            .from("organization_users")
+            .select("role")
+            .eq("organization_id", selectedOrganization.id)
+            .eq("user_id", user.id)
+            .eq("status", "active")
+            .in("role", ["admin", "owner"]),
+          supabase
+            .from("point_users")
+            .select("role")
+            .eq("point_id", pointIdFromRoute)
+            .eq("user_id", user.id)
+            .eq("status", "active")
+            .eq("role", "admin"),
+        ])
 
         if (pointResult.error) throw pointResult.error
         if (pointMembersResult.error) throw pointMembersResult.error
-        if (organizationMembersResult.error) throw organizationMembersResult.error
         if (orgPermissionResult.error) throw orgPermissionResult.error
         if (pointPermissionResult.error) throw pointPermissionResult.error
 
         const nextPoint = pointResult.data
-        if (!nextPoint) {
-          throw new Error("Point not found")
-        }
-
+        if (!nextPoint) throw new Error("Point not found")
         if (nextPoint.organization_id !== selectedOrganization.id) {
-          throw new Error("Point does not belong to the selected organization")
+          throw new Error("Point does not belong to selected organization")
         }
 
         const expectedPointSegment = getPointSegment(nextPoint)
         if (expectedPointSegment !== pointSlug) {
-          navigate(
-            `/${getOrganizationSegment(selectedOrganization)}/${expectedPointSegment}/team`,
-            { replace: true }
-          )
-        }
-
-        const orgPermissionRows = orgPermissionResult.data ?? []
-        const pointPermissionRows = pointPermissionResult.data ?? []
-        const nextCanManageTeam = orgPermissionRows.length > 0 || pointPermissionRows.length > 0
-
-        let nextPermissionLabel = "קריאה בלבד"
-        if (orgPermissionRows.some((row) => row.role === "owner")) {
-          nextPermissionLabel = "בעלים ארגוני"
-        } else if (orgPermissionRows.some((row) => row.role === "admin")) {
-          nextPermissionLabel = "מנהל ארגוני"
-        } else if (pointPermissionRows.length > 0) {
-          nextPermissionLabel = "מנהל נקודה"
+          navigate(`/${getOrganizationSegment(selectedOrganization)}/${expectedPointSegment}/team`, {
+            replace: true,
+          })
         }
 
         const pointMemberRows = (pointMembersResult.data ?? []) as PointMemberRow[]
-        const organizationMemberRows = (organizationMembersResult.data ?? []) as OrganizationMemberRow[]
-        const profilesById = await getProfilesByIdsCached(
-          organizationMemberRows.map((member) => member.user_id)
-        )
+        const profilesById = await getProfilesByIdsCached(pointMemberRows.map((member) => member.user_id))
 
         if (!isMounted) return
 
-        const pointMembersByUserId = new Map(
-          pointMemberRows.map((member) => [member.user_id, member] as const)
-        )
+        const nextCanManageTeam =
+          (orgPermissionResult.data ?? []).length > 0 || (pointPermissionResult.data ?? []).length > 0
 
-        const nextMembers = pointMemberRows.map((member) => ({
-          user_id: member.user_id,
-          role: member.role,
-          status: member.status,
-          title: member.title ?? null,
-          profile: profilesById[member.user_id] ?? null,
-        }))
-
-        const nextAvailableMembers = organizationMemberRows
-          .filter((member) => !pointMembersByUserId.has(member.user_id))
-          .map((member) => ({
-            user_id: member.user_id,
-            role: member.role,
-            status: member.status,
-            title: member.title ?? null,
-            profile: profilesById[member.user_id] ?? null,
-          }))
-          .sort((left, right) =>
-            formatMemberName(left).localeCompare(formatMemberName(right), "he")
-          )
+        let nextPermissionLabel = "קריאה בלבד"
+        if ((orgPermissionResult.data ?? []).length > 0) {
+          nextPermissionLabel = "ניהול ארגוני"
+        } else if ((pointPermissionResult.data ?? []).length > 0) {
+          nextPermissionLabel = "מנהל נקודה"
+        }
 
         setPoint(nextPoint)
-        setMembers(nextMembers)
-        setAvailableMembers(nextAvailableMembers)
+        setMembers(
+          pointMemberRows.map((member) => ({
+            ...member,
+            profile: profilesById[member.user_id] ?? null,
+          }))
+        )
         setCanManageTeam(nextCanManageTeam)
         setPermissionLabel(nextPermissionLabel)
       } catch (error) {
@@ -304,14 +251,9 @@ export default function PointTeamPage() {
         console.error("Error loading point team:", error)
         setPoint(null)
         setMembers([])
-        setAvailableMembers([])
         setCanManageTeam(false)
         setPermissionLabel("קריאה בלבד")
-        if (error instanceof Error && error.message.includes("selected organization")) {
-          setPointError("הנקודה הזו לא שייכת לארגון שנבחר.")
-        } else {
-          setPointError("לא הצלחנו לטעון את הנקודה הזו כרגע.")
-        }
+        setPointError("לא הצלחנו לטעון את הנקודה הזו כרגע.")
         setMembersError("לא הצלחנו לטעון את צוות הנקודה כרגע.")
       } finally {
         if (isMounted) {
@@ -328,6 +270,33 @@ export default function PointTeamPage() {
     }
   }, [navigate, pointIdFromRoute, pointSlug, selectedOrganization, user?.id])
 
+  useEffect(() => {
+    setSelectedMemberId((current) => {
+      if (members.length === 0) return null
+      if (current && members.some((member) => member.user_id === current)) return current
+      return members[0]?.user_id ?? null
+    })
+  }, [members])
+
+  const selectedMember = members.find((member) => member.user_id === selectedMemberId) ?? null
+
+  useEffect(() => {
+    if (!selectedMember) {
+      setMemberTitle("")
+      setMemberRole("member")
+      setMemberStatus("active")
+      setMemberSaveError(null)
+      setMemberSaveMessage(null)
+      return
+    }
+
+    setMemberTitle(selectedMember.title?.trim() || "")
+    setMemberRole(selectedMember.role || "member")
+    setMemberStatus(selectedMember.status || "active")
+    setMemberSaveError(null)
+    setMemberSaveMessage(null)
+  }, [selectedMember])
+
   const organizationOptions = useMemo(
     () =>
       organizations.map((organization) => ({
@@ -337,85 +306,100 @@ export default function PointTeamPage() {
     [organizations]
   )
 
-  const selectedCandidate = useMemo(
-    () => availableMembers.find((member) => member.user_id === selectedUserId) ?? null,
-    [availableMembers, selectedUserId]
-  )
-
   const handleOrganizationChange = (value: string) => {
-    const nextOrganization = organizations.find(
-      (organization) => organization.id.toString() === value
-    )
+    const nextOrganization = organizations.find((organization) => organization.id.toString() === value)
     if (!nextOrganization) return
     navigate(`/${getOrganizationSegment(nextOrganization)}`)
   }
 
-  const resetForm = () => {
-    setSelectedUserId("")
-    setTitle("")
-    setRole("member")
-  }
+  const formatMemberName = (member: TeamMember) =>
+    member.profile?.display_name?.trim() || member.title?.trim() || "משתמש ארגוני"
 
-  const handleAddMember = async () => {
-    if (!point || !selectedOrganization || !selectedUserId || !canManageTeam) return
+  const handleSaveMember = async () => {
+    if (!point || !selectedMember || !canManageTeam) return
 
-    setSaving(true)
-    setSaveError(null)
-    setSaveMessage(null)
+    setMemberSaving(true)
+    setMemberSaveError(null)
+    setMemberSaveMessage(null)
 
     try {
-      const { error } = await supabase.from("point_users").upsert(
-        {
-          point_id: point.id,
-          user_id: selectedUserId,
-          role,
-          title: title.trim() || null,
-          status: "active",
-        },
-        { onConflict: "point_id,user_id" }
-      )
+      const trimmedTitle = memberTitle.trim()
+      const { error } = await supabase
+        .from("point_users")
+        .update({
+          role: memberRole,
+          status: memberStatus,
+          title: trimmedTitle || null,
+        })
+        .eq("point_id", point.id)
+        .eq("user_id", selectedMember.user_id)
 
-      if (error) {
-        throw error
+      if (error) throw error
+
+      const updatedMember: TeamMember = {
+        ...selectedMember,
+        role: memberRole,
+        status: memberStatus,
+        title: trimmedTitle || null,
       }
 
-      const candidate = selectedCandidate
-      const nextMember: TeamMember = {
-        user_id: selectedUserId,
-        role,
-        status: "active",
-        title: title.trim() || candidate?.title || null,
-        profile: candidate?.profile ?? null,
-      }
-
-      setMembers((current) =>
-        [nextMember, ...current].sort((left, right) =>
-          formatMemberName(left).localeCompare(formatMemberName(right), "he")
+      if (memberStatus === "inactive") {
+        setMembers((current) => current.filter((member) => member.user_id !== selectedMember.user_id))
+        setMemberSaveMessage("חבר הנקודה הועבר למצב לא פעיל והוסר מהרשימה הפעילה.")
+      } else {
+        setMembers((current) =>
+          current.map((member) => (member.user_id === selectedMember.user_id ? updatedMember : member))
         )
-      )
-      setAvailableMembers((current) =>
-        current.filter((member) => member.user_id !== selectedUserId)
-      )
-      setSaveMessage(
-        `המשתמש ${formatMemberName(nextMember)} נוסף בהצלחה לצוות הנקודה.`
-      )
-      resetForm()
+        setMemberSaveMessage("פרטי חבר הנקודה עודכנו.")
+      }
     } catch (error) {
-      console.error("Error adding point member:", error)
-      setSaveError("לא הצלחנו להוסיף את המשתמש לצוות הנקודה כרגע.")
+      console.error("Error updating point member:", error)
+      setMemberSaveError("לא הצלחנו לעדכן את חבר הנקודה כרגע.")
     } finally {
-      setSaving(false)
+      setMemberSaving(false)
     }
+  }
+
+  const handleRemoveMember = async () => {
+    if (!point || !selectedMember || !canManageTeam) return
+
+    const shouldRemove = window.confirm("להסיר את חבר הצוות מהנקודה?")
+    if (!shouldRemove) return
+
+    setMemberRemoving(true)
+    setMemberSaveError(null)
+    setMemberSaveMessage(null)
+
+    try {
+      const { error } = await supabase
+        .from("point_users")
+        .delete()
+        .eq("point_id", point.id)
+        .eq("user_id", selectedMember.user_id)
+
+      if (error) throw error
+
+      setMembers((current) => current.filter((member) => member.user_id !== selectedMember.user_id))
+      setMemberSaveMessage("חבר הצוות הוסר מהנקודה.")
+    } catch (error) {
+      console.error("Error removing point member:", error)
+      setMemberSaveError("לא הצלחנו להסיר את חבר הנקודה כרגע.")
+    } finally {
+      setMemberRemoving(false)
+    }
+  }
+
+  const handleOpenCreatePage = () => {
+    if (!selectedOrganization || !point) return
+    navigate(`/${getOrganizationSegment(selectedOrganization)}/${getPointSegment(point)}/team/new`)
   }
 
   return (
     <SidebarProvider
-      style={
-        {
-          "--sidebar-width": "calc(var(--spacing) * 72)",
-          "--header-height": "calc(var(--spacing) * 12)",
-        } as CSSProperties
-      }
+      style={{
+        "--sidebar-width": "calc(var(--spacing) * 72)",
+        "--header-height": "calc(var(--spacing) * 12)",
+      } as CSSProperties}
     >
       <AppSidebar side="right" variant="inset" />
       <SidebarInset dir="rtl">
@@ -431,19 +415,17 @@ export default function PointTeamPage() {
             {loadingOrganizations || loadingPoint || loadingMembers ? (
               <PageMainLayout>
                 <PageMainContent>
-                  <Skeleton className="h-[34rem] rounded-3xl" />
+                  <Skeleton className="h-[32rem] rounded-3xl" />
                 </PageMainContent>
                 <PageMainRail>
-                  <Skeleton className="h-[34rem] rounded-3xl" />
+                  <Skeleton className="h-[32rem] rounded-3xl" />
                 </PageMainRail>
               </PageMainLayout>
             ) : organizationsError || pointError ? (
               <Alert variant="destructive">
                 <CircleAlert className="size-4" />
                 <AlertTitle>העמוד אינו זמין</AlertTitle>
-                <AlertDescription>
-                  {pointError || organizationsError || "לא הצלחנו לטעון את עמוד צוות הנקודה."}
-                </AlertDescription>
+                <AlertDescription>{pointError || organizationsError || "לא הצלחנו לטעון את עמוד צוות הנקודה."}</AlertDescription>
               </Alert>
             ) : !selectedOrganization || !point ? (
               <Alert variant="destructive">
@@ -453,226 +435,192 @@ export default function PointTeamPage() {
               </Alert>
             ) : (
               <PageMainLayout>
+                <PageMainRail>
+                  <div className="space-y-4">
+                    <InfoPanel className="xl:static">
+                      <InfoPanelHeader
+                        icon={MapPinned}
+                        title={point.name?.trim() || `נקודה #${point.id}`}
+                        description={point.notes?.trim() || "ניהול הצוות הפעיל של הנקודה מתוך חברי הארגון."}
+                        badge={<Badge variant={canManageTeam ? "default" : "outline"}>{permissionLabel}</Badge>}
+                      />
+                      <InfoPanelBody className="pt-0" />
+                    </InfoPanel>
+
+                    <Card className="border-border/70 shadow-none">
+                      <CardContent className="flex flex-col gap-3 p-5">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium">הוספת חבר חדש</p>
+                          <p className="text-sm text-muted-foreground">
+                            שיוך חבר ארגון לנקודה נעשה בעמוד ייעודי, כדי להשאיר את עמוד הצוות ממוקד בניהול הקיים.
+                          </p>
+                        </div>
+                        <Button onClick={handleOpenCreatePage} disabled={!canManageTeam} className="w-full rounded-xl">
+                          <UserPlus className="size-4" />
+                          הוספת חבר לנקודה
+                        </Button>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-border/70 shadow-none">
+                      <CardHeader className="gap-3">
+                        <CardTitle className="flex items-center gap-2 text-xl">
+                          <Users2 className="size-5" />
+                          ניהול חבר קיים
+                        </CardTitle>
+                        <CardDescription>
+                          בחירת חבר מהרשימה תאפשר לעדכן תפקיד, טייטל, סטטוס ושיוך לנקודה.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-5">
+                        {!selectedMember ? (
+                          <Alert>
+                            <AlertTitle>לא נבחר חבר צוות</AlertTitle>
+                            <AlertDescription>בחרו חבר צוות מהרשימה כדי לערוך אותו.</AlertDescription>
+                          </Alert>
+                        ) : (
+                          <>
+                            <div className="space-y-3 rounded-xl border border-border/60 bg-muted/15 p-3">
+                              <MemberCard
+                                name={formatMemberName(selectedMember)}
+                                meta={selectedMember.title?.trim() || "ללא תיאור תפקיד"}
+                                avatarUrl={selectedMember.profile?.avatar_url ?? undefined}
+                                initialsSource={selectedMember.profile?.display_name || selectedMember.title}
+                                badgeLabel={selectedMember.role || "member"}
+                                className="border-border/70 bg-card"
+                              />
+                            </div>
+
+                            <div className="grid gap-4">
+                              <div className="space-y-2">
+                                <label className="text-sm font-medium">שם מלא</label>
+                                <Input
+                                  value={selectedMember.profile?.display_name?.trim() || "לא הוגדר"}
+                                  disabled
+                                  readOnly
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-sm font-medium">טייטל בנקודה</label>
+                                <Input
+                                  value={memberTitle}
+                                  onChange={(event) => setMemberTitle(event.target.value)}
+                                  disabled={!canManageTeam || memberSaving || memberRemoving}
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-sm font-medium">תפקיד בנקודה</label>
+                                <Select value={memberRole} onValueChange={setMemberRole} disabled={!canManageTeam || memberSaving || memberRemoving}>
+                                  <SelectTrigger className="rounded-xl">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent align="end">
+                                    {ROLE_OPTIONS.map((option) => (
+                                      <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-sm font-medium">סטטוס</label>
+                                <Select value={memberStatus} onValueChange={setMemberStatus} disabled={!canManageTeam || memberSaving || memberRemoving}>
+                                  <SelectTrigger className="rounded-xl">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent align="end">
+                                    {STATUS_OPTIONS.map((option) => (
+                                      <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+
+                            {memberSaveError ? (
+                              <Alert variant="destructive">
+                                <AlertTitle>העדכון נכשל</AlertTitle>
+                                <AlertDescription>{memberSaveError}</AlertDescription>
+                              </Alert>
+                            ) : null}
+
+                            {memberSaveMessage ? (
+                              <Alert>
+                                <AlertTitle>העדכון בוצע</AlertTitle>
+                                <AlertDescription>{memberSaveMessage}</AlertDescription>
+                              </Alert>
+                            ) : null}
+
+                            <div className="flex items-center justify-between gap-3">
+                              <Button variant="destructive" onClick={handleRemoveMember} disabled={!canManageTeam || memberSaving || memberRemoving}>
+                                {memberRemoving ? "מסיר..." : "הסרה מהנקודה"}
+                              </Button>
+                              <Button onClick={handleSaveMember} disabled={!canManageTeam || memberSaving || memberRemoving} className="rounded-xl">
+                                {memberSaving ? "שומר..." : "שמירת שינויים"}
+                              </Button>
+                            </div>
+                          </>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+                </PageMainRail>
+
                 <PageMainContent>
                   <Card className="border-border/70 shadow-none">
                     <CardHeader className="gap-3">
-                      <CardTitle className="flex items-center gap-2 text-xl">
-                        <Users2 className="size-5" />
-                        חברי הנקודה
-                      </CardTitle>
-                      <CardDescription>
-                        כאן מופיעים כל המשתמשים הפעילים שמשויכים לנקודה, יחד עם התפקיד והטייטל שלהם.
-                      </CardDescription>
+                      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                        <div className="space-y-2">
+                          <CardTitle className="flex items-center gap-2 text-xl">
+                            <Users2 className="size-5" />
+                            חברי הנקודה
+                          </CardTitle>
+                          <CardDescription>
+                            זהו מוקד הניהול הראשי של צוות הנקודה: חברים פעילים, תפקידי נקודה ופרטי השיוך שלהם.
+                          </CardDescription>
+                        </div>
+                        <Badge variant="outline" className="rounded-full">
+                          סה"כ {members.length} חברים
+                        </Badge>
+                      </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       {membersError ? (
                         <Alert variant="destructive">
-                          <AlertTitle>אי אפשר לטעון את צוות הנקודה</AlertTitle>
+                          <AlertTitle>אי אפשר לטעון את הצוות</AlertTitle>
                           <AlertDescription>{membersError}</AlertDescription>
                         </Alert>
                       ) : members.length === 0 ? (
                         <Alert>
                           <AlertTitle>עדיין אין חברי נקודה</AlertTitle>
-                          <AlertDescription>
-                            אפשר להוסיף את חבר הצוות הראשון לנקודה מתוך חברי הארגון הקיימים.
-                          </AlertDescription>
+                          <AlertDescription>אפשר להוסיף את חבר הצוות הראשון מהעמוד הייעודי להוספת חבר לנקודה.</AlertDescription>
                         </Alert>
                       ) : (
-                        <div className="grid gap-4 md:grid-cols-2">
-                          {members.map((member) => {
-                            const memberName = formatMemberName(member)
-                            return (
+                        <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                          {members.map((member) => (
+                            <button key={member.user_id} type="button" className="w-full text-right" onClick={() => setSelectedMemberId(member.user_id)}>
                               <MemberCard
-                                key={member.user_id}
-                                name={memberName}
-                                meta={formatMemberMeta(member)}
+                                name={formatMemberName(member)}
+                                meta={member.title?.trim() || "ללא תיאור תפקיד"}
                                 avatarUrl={member.profile?.avatar_url ?? undefined}
                                 initialsSource={member.profile?.display_name || member.title}
                                 badgeLabel={member.role || "member"}
-                                className="border-border/70 bg-card"
+                                className={
+                                  selectedMemberId === member.user_id
+                                    ? "border-primary/50 bg-primary/5 ring-1 ring-primary/20"
+                                    : "border-border/70 bg-card transition-colors hover:border-primary/30"
+                                }
                               />
-                            )
-                          })}
+                            </button>
+                          ))}
                         </div>
                       )}
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-border/70 shadow-none">
-                    <CardHeader className="gap-3">
-                      <CardTitle className="flex items-center gap-2 text-xl">
-                        <UserPlus className="size-5" />
-                        הוספת חבר צוות לנקודה
-                      </CardTitle>
-                      <CardDescription>
-                        אפשר לבחור רק משתמשים שכבר קיימים בתוך אותו ארגון, ולהוסיף אותם לנקודה עם תפקיד וטייטל מתאימים.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-5">
-                      {!canManageTeam ? (
-                        <Alert variant="destructive">
-                          <AlertTitle>אין הרשאה</AlertTitle>
-                          <AlertDescription>
-                            רק בעלי ומנהלי הארגון, או מנהלי הנקודה, יכולים לנהל את צוות הנקודה.
-                          </AlertDescription>
-                        </Alert>
-                      ) : null}
-
-                      {availableMembers.length === 0 ? (
-                        <Alert>
-                          <AlertTitle>אין כרגע משתמשים זמינים להוספה</AlertTitle>
-                          <AlertDescription>
-                            כל חברי הארגון כבר משויכים לנקודה הזו, או שאין עדיין חברים פעילים בארגון.
-                          </AlertDescription>
-                        </Alert>
-                      ) : (
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <div className="space-y-2 md:col-span-2">
-                            <label className="text-sm font-medium">בחירת משתמש מהארגון</label>
-                            <Select
-                              value={selectedUserId}
-                              onValueChange={setSelectedUserId}
-                              disabled={!canManageTeam || saving}
-                            >
-                              <SelectTrigger className="rounded-xl">
-                                <SelectValue placeholder="בחרו משתמש קיים מהארגון" />
-                              </SelectTrigger>
-                              <SelectContent align="end">
-                                {availableMembers.map((member) => (
-                                  <SelectItem key={member.user_id} value={member.user_id}>
-                                    {formatMemberName(member)}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">תפקיד בנקודה</label>
-                            <Select
-                              value={role}
-                              onValueChange={setRole}
-                              disabled={!canManageTeam || saving}
-                            >
-                              <SelectTrigger className="rounded-xl">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent align="end">
-                                {ROLE_OPTIONS.map((option) => (
-                                  <SelectItem key={option.value} value={option.value}>
-                                    {option.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">טייטל בנקודה</label>
-                            <Input
-                              value={title}
-                              onChange={(event) => setTitle(event.target.value)}
-                              disabled={!canManageTeam || saving}
-                              placeholder="למשל: טכנאי קבלה"
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {selectedCandidate ? (
-                        <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-                          המשתמש שנבחר:{" "}
-                          <span className="font-medium text-foreground">
-                            {formatMemberName(selectedCandidate)}
-                          </span>
-                        </div>
-                      ) : null}
-
-                      {saveError ? (
-                        <Alert variant="destructive">
-                          <AlertTitle>ההוספה נכשלה</AlertTitle>
-                          <AlertDescription>{saveError}</AlertDescription>
-                        </Alert>
-                      ) : null}
-
-                      {saveMessage ? (
-                        <Alert>
-                          <AlertTitle>המשתמש נוסף</AlertTitle>
-                          <AlertDescription>{saveMessage}</AlertDescription>
-                        </Alert>
-                      ) : null}
-
-                      <div className="flex justify-end">
-                        <Button
-                          onClick={handleAddMember}
-                          disabled={!canManageTeam || saving || !selectedUserId}
-                          className="rounded-xl"
-                        >
-                          <UserPlus className="size-4" />
-                          {saving ? "מוסיף משתמש..." : "הוספה לצוות הנקודה"}
-                        </Button>
-                      </div>
                     </CardContent>
                   </Card>
                 </PageMainContent>
-
-                <PageMainRail>
-                <InfoPanel>
-                  <InfoPanelHeader
-                    icon={MapPinned}
-                    title={point.name?.trim() || `נקודה #${point.id}`}
-                    description={point.notes?.trim() || "ניהול הצוות הפעיל של הנקודה מתוך משתמשי הארגון."}
-                    badge={
-                      <Badge variant={canManageTeam ? "default" : "outline"}>
-                        {permissionLabel}
-                      </Badge>
-                    }
-                  />
-                  <InfoPanelBody>
-                    <InfoPanelStats>
-                      <InfoPanelStat
-                        icon={Users}
-                        label="חברי נקודה"
-                        value={members.length}
-                        description="משתמשים פעילים שכבר משויכים לנקודה"
-                      />
-                      <InfoPanelStat
-                        icon={UserPlus}
-                        label="זמינים להוספה"
-                        value={availableMembers.length}
-                        description="חברי ארגון שניתן לשייך לנקודה הזו"
-                      />
-                    </InfoPanelStats>
-
-                    <InfoPanelSection
-                      icon={ShieldCheck}
-                      title="הרשאות ניהול"
-                      description="ניהול צוות הנקודה זמין למנהלי נקודה ולמנהלי או בעלי הארגון."
-                    >
-                      <InfoPanelDetailList>
-                        <InfoPanelDetail label="סטטוס גישה" value={permissionLabel} />
-                        <InfoPanelDetail
-                          label="סטטוס נקודה"
-                          value={point.status === "active" ? "פעילה" : point.status || "לא פעילה"}
-                        />
-                      </InfoPanelDetailList>
-                    </InfoPanelSection>
-
-                    <InfoPanelSection title="הקשר ארגוני">
-                      <InfoPanelDetailList>
-                        <InfoPanelDetail
-                          label="ארגון"
-                          value={selectedOrganization.name?.trim() || `ארגון #${selectedOrganization.id}`}
-                        />
-                        <InfoPanelDetail
-                          label="מסלול חזרה"
-                          value="עמוד הנקודה"
-                        />
-                      </InfoPanelDetailList>
-                    </InfoPanelSection>
-                  </InfoPanelBody>
-                </InfoPanel>
-                </PageMainRail>
               </PageMainLayout>
             )}
           </div>
