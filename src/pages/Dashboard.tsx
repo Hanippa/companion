@@ -8,7 +8,6 @@ import {
   GitBranchPlus,
   MapPinned,
   Plus,
-  Route,
   ShieldUser,
   Sparkles,
   Users2,
@@ -614,76 +613,14 @@ export default function Dashboard() {
                             </AlertDescription>
                           </Alert>
                         ) : (
-                          <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                             {pointsWithStats.map((point) => (
-                              <Card
+                              <DashboardPointCard
                                 key={point.id}
-                                size="sm"
-                                className="border-border/70 shadow-none transition-colors hover:border-primary/35"
-                              >
-                                <CardHeader className="gap-3">
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="space-y-1.5">
-                                      <CardTitle className="text-lg">
-                                        {getPointLabel(point)}
-                                      </CardTitle>
-                                      <CardDescription className="line-clamp-2 leading-6">
-                                        {getPointDescription(point)}
-                                      </CardDescription>
-                                    </div>
-                                    <Badge
-                                      variant={point.status === "active" ? "default" : "outline"}
-                                      className="rounded-full"
-                                    >
-                                      {getStatusLabel(point.status)}
-                                    </Badge>
-                                  </div>
-                                </CardHeader>
-
-                                <CardContent className="space-y-4">
-                                  <div className="flex items-center justify-between gap-4">
-                                    <div className="space-y-2">
-                                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                        <Users2 className="size-4" />
-                                        חברים
-                                      </div>
-                                      <MemberAvatarStack
-                                        memberIds={point.memberIds}
-                                        profilesById={profilesById}
-                                        size="sm"
-                                      />
-                                    </div>
-
-                                    <div className="text-right">
-                                      <div className="text-2xl font-semibold">
-                                        {point.membersCount}
-                                      </div>
-                                      <div className="text-xs text-muted-foreground">חברים</div>
-                                    </div>
-                                  </div>
-
-                                  <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5">
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                      <Route className="size-4" />
-                                      מסלולים
-                                    </div>
-                                    <div className="text-base font-semibold">
-                                      {point.tracksCount}
-                                    </div>
-                                  </div>
-                                </CardContent>
-
-                                <CardFooter className="border-t border-border/60 pt-4">
-                                  <Button
-                                    className="group w-full justify-between rounded-xl"
-                                    variant="outline"
-                                    onClick={() => handlePointOpen(point)}
-                                  >
-                                    מעבר לעמוד הנקודה
-                                    <ArrowLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-1" />
-                                  </Button>
-                                </CardFooter>
-                              </Card>
+                                point={point}
+                                profilesById={profilesById}
+                                onOpen={() => handlePointOpen(point)}
+                              />
                             ))}
                           </div>
                         )}
@@ -743,6 +680,75 @@ function DashboardSkeleton() {
       </Card>
       </PageMainContent>
     </PageMainLayout>
+  )
+}
+
+function DashboardPointCard({
+  point,
+  profilesById,
+  onOpen,
+}: {
+  point: PointWithStats
+  profilesById: Record<string, ProfileSummary>
+  onOpen: () => void
+}) {
+  return (
+    <Card
+      size="sm"
+      className="point-entry-card overflow-hidden border-border/70 bg-card/95 shadow-none"
+    >
+      <CardHeader className="gap-2 pb-2.5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <div className="flex items-center gap-2 text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
+              <MapPinned className="size-3.5" />
+              נקודה
+            </div>
+            <CardTitle className="truncate text-base">{getPointLabel(point)}</CardTitle>
+          </div>
+          <Badge
+            variant={point.status === "active" ? "default" : "outline"}
+            className="shrink-0 rounded-full px-2 py-0.5 text-[11px]"
+          >
+            {getStatusLabel(point.status)}
+          </Badge>
+        </div>
+
+        <CardDescription className="line-clamp-1 leading-5">
+          {getPointDescription(point)}
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent className="space-y-2">
+        <div className="rounded-[1.1rem] border border-border/60 bg-linear-to-l from-muted/5 via-background to-background px-3 py-2.5">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Users2 className="size-4 text-muted-foreground" />
+              צוות נקודה
+            </div>
+            <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[11px]">
+              {point.membersCount}
+            </Badge>
+          </div>
+          <MemberAvatarStack
+            memberIds={point.memberIds}
+            profilesById={profilesById}
+            size="sm"
+          />
+        </div>
+      </CardContent>
+
+      <CardFooter className="border-t border-border/60 pt-2.5">
+        <Button
+          className="group h-9 w-full justify-between rounded-xl px-3"
+          variant="outline"
+          onClick={onOpen}
+        >
+          מעבר לעמוד הנקודה
+          <ArrowLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-1" />
+        </Button>
+      </CardFooter>
+    </Card>
   )
 }
 
@@ -873,3 +879,4 @@ function MemberAvatarStack({
     </AvatarGroup>
   )
 }
+

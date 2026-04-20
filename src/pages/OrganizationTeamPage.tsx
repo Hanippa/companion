@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { CircleAlert, Copy, ShieldUser, UserPlus, Users2 } from "lucide-react"
+import { CircleAlert, ShieldUser, UserPlus, Users2 } from "lucide-react"
 
 import { AppSidebar } from "@/components/app-sidebar"
 import {
   InfoPanel,
   InfoPanelBody,
+  InfoPanelDetail,
+  InfoPanelDetailList,
   InfoPanelHeader,
+  InfoPanelSection,
 } from "@/components/info-panel"
 import { MemberCard } from "@/components/member-card"
 import { PageBody, PageMainContent, PageMainLayout, PageMainRail } from "@/components/page-main-layout"
@@ -67,10 +70,6 @@ const STATUS_OPTIONS = [
   { value: "inactive", label: "לא פעיל" },
 ]
 
-function generateTemporaryPassword() {
-  return `Comp-${Math.random().toString(36).slice(2, 8)}A1!`
-}
-
 export default function OrganizationTeamPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -80,20 +79,10 @@ export default function OrganizationTeamPage() {
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [loadingOrganizations, setLoadingOrganizations] = useState(true)
   const [organizationsError, setOrganizationsError] = useState<string | null>(null)
-
   const [members, setMembers] = useState<TeamMember[]>([])
   const [loadingMembers, setLoadingMembers] = useState(true)
   const [membersError, setMembersError] = useState<string | null>(null)
   const [canManage, setCanManage] = useState(false)
-
-  const [email, setEmail] = useState("")
-  const [displayName, setDisplayName] = useState("")
-  const [title, setTitle] = useState("")
-  const [role, setRole] = useState("member")
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
-  const [saveMessage, setSaveMessage] = useState<string | null>(null)
-  const [createdPassword, setCreatedPassword] = useState<string | null>(null)
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null)
   const [memberDisplayName, setMemberDisplayName] = useState("")
   const [memberTitle, setMemberTitle] = useState("")
@@ -229,20 +218,13 @@ export default function OrganizationTeamPage() {
 
   useEffect(() => {
     setSelectedMemberId((current) => {
-      if (members.length === 0) {
-        return null
-      }
-
-      if (current && members.some((member) => member.user_id === current)) {
-        return current
-      }
-
+      if (members.length === 0) return null
+      if (current && members.some((member) => member.user_id === current)) return current
       return members[0]?.user_id ?? null
     })
   }, [members])
 
-  const selectedMember =
-    members.find((member) => member.user_id === selectedMemberId) ?? null
+  const selectedMember = members.find((member) => member.user_id === selectedMemberId) ?? null
 
   useEffect(() => {
     if (!selectedMember) {
@@ -273,79 +255,9 @@ export default function OrganizationTeamPage() {
   )
 
   const handleOrganizationChange = (value: string) => {
-    const nextOrganization = organizations.find(
-      (organization) => organization.id.toString() === value
-    )
+    const nextOrganization = organizations.find((organization) => organization.id.toString() === value)
     if (!nextOrganization) return
-    navigate(`/${getOrganizationSegment(nextOrganization)}`)
-  }
-
-  const resetForm = () => {
-    setEmail("")
-    setDisplayName("")
-    setTitle("")
-    setRole("member")
-  }
-
-  const handleCreateUser = async () => {
-    if (!selectedOrganization || !canManage) return
-
-    setSaving(true)
-    setSaveError(null)
-    setSaveMessage(null)
-    setCreatedPassword(null)
-
-    const temporaryPassword = generateTemporaryPassword()
-
-    try {
-      const { data, error } = await supabase.functions.invoke("create-user-owner", {
-        body: {
-          email: email.trim(),
-          password: temporaryPassword,
-          display_name: displayName.trim(),
-          name: displayName.trim(),
-          organization_id: selectedOrganization.id,
-          role,
-          title: title.trim() || null,
-        },
-      })
-
-      if (error) {
-        throw error
-      }
-
-      const createdUserId =
-        (data as { user?: { id?: string } } | null)?.user?.id ?? null
-
-      const nextMember: TeamMember = {
-        organization_id: selectedOrganization.id,
-        user_id: createdUserId || `pending-${Date.now()}`,
-        role,
-        status: "active",
-        title: title.trim() || null,
-        profile: {
-          id: createdUserId || `pending-${Date.now()}`,
-          display_name: displayName.trim(),
-          avatar_url: null,
-        },
-      }
-
-      setMembers((current) => [nextMember, ...current])
-      setSaveMessage(`המשתמש נוצר בהצלחה עבור ${email.trim()}.`)
-      setCreatedPassword(temporaryPassword)
-      resetForm()
-    } catch (error) {
-      console.error("Error creating managed user:", error)
-      setSaveError("לא הצלחנו ליצור את המשתמש כרגע.")
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleCopyPassword = async () => {
-    if (!createdPassword) return
-    await navigator.clipboard.writeText(createdPassword)
-    setSaveMessage("הסיסמה הזמנית הועתקה.")
+    navigate(`/${getOrganizationSegment(nextOrganization)}/team`)
   }
 
   const handleSaveMember = async () => {
@@ -360,19 +272,10 @@ export default function OrganizationTeamPage() {
       const trimmedTitle = memberTitle.trim()
 
       const [profileResult, membershipResult] = await Promise.all([
-        supabase
-          .from("profiles")
-          .update({
-            display_name: trimmedDisplayName || null,
-          })
-          .eq("id", selectedMember.user_id),
+        supabase.from("profiles").update({ display_name: trimmedDisplayName || null }).eq("id", selectedMember.user_id),
         supabase
           .from("organization_users")
-          .update({
-            role: memberRole,
-            status: memberStatus,
-            title: trimmedTitle || null,
-          })
+          .update({ role: memberRole, status: memberStatus, title: trimmedTitle || null })
           .eq("organization_id", selectedOrganization.id)
           .eq("user_id", selectedMember.user_id),
       ])
@@ -386,27 +289,16 @@ export default function OrganizationTeamPage() {
         status: memberStatus,
         title: trimmedTitle || null,
         profile: selectedMember.profile
-          ? {
-              ...selectedMember.profile,
-              display_name: trimmedDisplayName || null,
-            }
-          : {
-              id: selectedMember.user_id,
-              display_name: trimmedDisplayName || null,
-              avatar_url: null,
-            },
+          ? { ...selectedMember.profile, display_name: trimmedDisplayName || null }
+          : { id: selectedMember.user_id, display_name: trimmedDisplayName || null, avatar_url: null },
       }
 
       if (memberStatus === "inactive") {
-        setMembers((current) =>
-          current.filter((member) => member.user_id !== selectedMember.user_id)
-        )
+        setMembers((current) => current.filter((member) => member.user_id !== selectedMember.user_id))
         setMemberSaveMessage("חבר הצוות הועבר למצב לא פעיל והוסר מהרשימה הפעילה.")
       } else {
         setMembers((current) =>
-          current.map((member) =>
-            member.user_id === selectedMember.user_id ? updatedMember : member
-          )
+          current.map((member) => (member.user_id === selectedMember.user_id ? updatedMember : member))
         )
         setMemberSaveMessage("פרטי חבר הצוות עודכנו.")
       }
@@ -437,9 +329,7 @@ export default function OrganizationTeamPage() {
 
       if (error) throw error
 
-      setMembers((current) =>
-        current.filter((member) => member.user_id !== selectedMember.user_id)
-      )
+      setMembers((current) => current.filter((member) => member.user_id !== selectedMember.user_id))
       setMemberSaveMessage("חבר הצוות הוסר מהארגון.")
     } catch (error) {
       console.error("Error removing organization member:", error)
@@ -449,15 +339,13 @@ export default function OrganizationTeamPage() {
     }
   }
 
+  const handleOpenCreatePage = () => {
+    if (!selectedOrganization) return
+    navigate(`/${getOrganizationSegment(selectedOrganization)}/team/new`)
+  }
+
   return (
-    <SidebarProvider
-      style={
-        {
-          "--sidebar-width": "calc(var(--spacing) * 72)",
-          "--header-height": "calc(var(--spacing) * 12)",
-        } as CSSProperties
-      }
-    >
+    <SidebarProvider style={{ "--sidebar-width": "calc(var(--spacing) * 72)", "--header-height": "calc(var(--spacing) * 12)" } as CSSProperties}>
       <AppSidebar side="right" variant="inset" />
       <SidebarInset dir="rtl">
         <SiteHeader
@@ -466,7 +354,6 @@ export default function OrganizationTeamPage() {
           selectedOrganizationId={selectedOrganization?.id.toString()}
           onOrganizationChange={handleOrganizationChange}
         />
-
         <PageBody>
           <div className="page-stack flex-1">
             {loadingOrganizations || loadingMembers ? (
@@ -498,121 +385,31 @@ export default function OrganizationTeamPage() {
                       <InfoPanelHeader
                         icon={ShieldUser}
                         title={selectedOrganization.name?.trim() || `ארגון #${selectedOrganization.id}`}
-                        description={selectedOrganization.notes?.trim() || "ניהול משתמשים ברמת הארגון."}
-                        badge={
-                          <Badge variant={canManage ? "default" : "outline"}>
-                            {canManage ? "בעלים" : "קריאה בלבד"}
-                          </Badge>
-                        }
+                        description={selectedOrganization.notes?.trim() || "ניהול חברי הארגון והרשאותיהם."}
+                        badge={<Badge variant={canManage ? "default" : "outline"}>{canManage ? "בעלים" : "קריאה בלבד"}</Badge>}
                       />
-                      <InfoPanelBody className="pt-0" />
+                      <InfoPanelBody>
+                        <InfoPanelSection title="הקשר">
+                          <InfoPanelDetailList>
+                            <InfoPanelDetail label="חברי ארגון פעילים" value={members.length} />
+                            <InfoPanelDetail label="גישה" value={canManage ? "ניהול מלא" : "צפייה בלבד"} />
+                          </InfoPanelDetailList>
+                        </InfoPanelSection>
+                      </InfoPanelBody>
                     </InfoPanel>
 
                     <Card className="border-border/70 shadow-none">
-                      <CardHeader className="gap-3">
-                        <CardTitle className="flex items-center gap-2 text-xl">
-                          <UserPlus className="size-5" />
-                          יצירת משתמש ארגוני
-                        </CardTitle>
-                        <CardDescription>
-                          בעל ארגון יכול להוסיף משתמש חדש ישירות ל־Auth ולשייך אותו לארגון עם תפקיד ושם.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-5">
-                        {!canManage ? (
-                          <Alert variant="destructive">
-                            <AlertTitle>אין הרשאה</AlertTitle>
-                            <AlertDescription>רק בעלי ארגון יכולים ליצור משתמשים חדשים.</AlertDescription>
-                          </Alert>
-                        ) : null}
-
-                        <div className="grid gap-4">
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">אימייל</label>
-                            <Input
-                              value={email}
-                              onChange={(event) => setEmail(event.target.value)}
-                              disabled={!canManage || saving}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">שם מלא</label>
-                            <Input
-                              value={displayName}
-                              onChange={(event) => setDisplayName(event.target.value)}
-                              disabled={!canManage || saving}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">תפקיד ארגוני</label>
-                            <Select value={role} onValueChange={setRole} disabled={!canManage || saving}>
-                              <SelectTrigger className="rounded-xl">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent align="end">
-                                {ROLE_OPTIONS.map((option) => (
-                                  <SelectItem key={option.value} value={option.value}>
-                                    {option.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">טייטל</label>
-                            <Input
-                              value={title}
-                              onChange={(event) => setTitle(event.target.value)}
-                              disabled={!canManage || saving}
-                            />
-                          </div>
+                      <CardContent className="flex flex-col gap-3 p-5">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium">יצירת חבר חדש</p>
+                          <p className="text-sm text-muted-foreground">
+                            פתיחת משתמש חדש נעשית בעמוד ייעודי, כדי להשאיר את עמוד הצוות ממוקד בניהול הקיים.
+                          </p>
                         </div>
-
-                        {saveError ? (
-                          <Alert variant="destructive">
-                            <AlertTitle>היצירה נכשלה</AlertTitle>
-                            <AlertDescription>{saveError}</AlertDescription>
-                          </Alert>
-                        ) : null}
-
-                        {saveMessage ? (
-                          <Alert>
-                            <AlertTitle>המשתמש נוצר</AlertTitle>
-                            <AlertDescription>{saveMessage}</AlertDescription>
-                          </Alert>
-                        ) : null}
-
-                        {createdPassword ? (
-                          <Alert>
-                            <AlertTitle>סיסמה זמנית</AlertTitle>
-                            <AlertDescription className="flex flex-col gap-3">
-                              <span>מסרו למשתמש את הסיסמה הזמנית הזו לצורך כניסה ראשונה.</span>
-                              <div className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
-                                <code className="text-sm">{createdPassword}</code>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="rounded-xl"
-                                  onClick={handleCopyPassword}
-                                >
-                                  <Copy className="size-4" />
-                                  העתקה
-                                </Button>
-                              </div>
-                            </AlertDescription>
-                          </Alert>
-                        ) : null}
-
-                        <div className="flex justify-end">
-                          <Button
-                            onClick={handleCreateUser}
-                            disabled={!canManage || saving || !email.trim() || !displayName.trim()}
-                            className="rounded-xl"
-                          >
-                            <UserPlus className="size-4" />
-                            {saving ? "יוצר משתמש..." : "יצירת משתמש"}
-                          </Button>
-                        </div>
+                        <Button onClick={handleOpenCreatePage} disabled={!canManage} className="w-full rounded-xl">
+                          <UserPlus className="size-4" />
+                          יצירת חבר חדש
+                        </Button>
                       </CardContent>
                     </Card>
 
@@ -623,7 +420,7 @@ export default function OrganizationTeamPage() {
                           ניהול חבר קיים
                         </CardTitle>
                         <CardDescription>
-                          כאן אפשר לערוך את פרטי החבר, התפקיד, הסטטוס והשיוך הארגוני שלו.
+                          בחירת חבר מהרשימה תאפשר לעדכן שם, תפקיד, סטטוס והרשאות ארגוניות.
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-5">
@@ -636,16 +433,10 @@ export default function OrganizationTeamPage() {
                           <>
                             <div className="space-y-3 rounded-xl border border-border/60 bg-muted/15 p-3">
                               <MemberCard
-                                name={
-                                  selectedMember.profile?.display_name?.trim() ||
-                                  selectedMember.title?.trim() ||
-                                  "חבר צוות"
-                                }
+                                name={selectedMember.profile?.display_name?.trim() || selectedMember.title?.trim() || "חבר צוות"}
                                 meta={selectedMember.title?.trim() || "ללא תיאור תפקיד"}
                                 avatarUrl={selectedMember.profile?.avatar_url ?? undefined}
-                                initialsSource={
-                                  selectedMember.profile?.display_name || selectedMember.title
-                                }
+                                initialsSource={selectedMember.profile?.display_name || selectedMember.title}
                                 badgeLabel={selectedMember.role || "member"}
                                 className="border-border/70 bg-card"
                               />
@@ -654,31 +445,19 @@ export default function OrganizationTeamPage() {
                             <div className="grid gap-4">
                               <div className="space-y-2">
                                 <label className="text-sm font-medium">אימייל</label>
-                                <Input value="נדרש backend ייעודי לעדכון אימייל" disabled readOnly />
+                                <Input value="שינוי אימייל יתווסף בהמשך דרך flow ייעודי" disabled readOnly />
                               </div>
                               <div className="space-y-2">
                                 <label className="text-sm font-medium">שם מלא</label>
-                                <Input
-                                  value={memberDisplayName}
-                                  onChange={(event) => setMemberDisplayName(event.target.value)}
-                                  disabled={!canManage || memberSaving || memberRemoving}
-                                />
+                                <Input value={memberDisplayName} onChange={(event) => setMemberDisplayName(event.target.value)} disabled={!canManage || memberSaving || memberRemoving} />
                               </div>
                               <div className="space-y-2">
                                 <label className="text-sm font-medium">טייטל</label>
-                                <Input
-                                  value={memberTitle}
-                                  onChange={(event) => setMemberTitle(event.target.value)}
-                                  disabled={!canManage || memberSaving || memberRemoving}
-                                />
+                                <Input value={memberTitle} onChange={(event) => setMemberTitle(event.target.value)} disabled={!canManage || memberSaving || memberRemoving} />
                               </div>
                               <div className="space-y-2">
                                 <label className="text-sm font-medium">תפקיד ארגוני</label>
-                                <Select
-                                  value={memberRole}
-                                  onValueChange={setMemberRole}
-                                  disabled={!canManage || memberSaving || memberRemoving}
-                                >
+                                <Select value={memberRole} onValueChange={setMemberRole} disabled={!canManage || memberSaving || memberRemoving}>
                                   <SelectTrigger className="rounded-xl">
                                     <SelectValue />
                                   </SelectTrigger>
@@ -693,11 +472,7 @@ export default function OrganizationTeamPage() {
                               </div>
                               <div className="space-y-2">
                                 <label className="text-sm font-medium">סטטוס</label>
-                                <Select
-                                  value={memberStatus}
-                                  onValueChange={setMemberStatus}
-                                  disabled={!canManage || memberSaving || memberRemoving}
-                                >
+                                <Select value={memberStatus} onValueChange={setMemberStatus} disabled={!canManage || memberSaving || memberRemoving}>
                                   <SelectTrigger className="rounded-xl">
                                     <SelectValue />
                                   </SelectTrigger>
@@ -727,18 +502,10 @@ export default function OrganizationTeamPage() {
                             ) : null}
 
                             <div className="flex items-center justify-between gap-3">
-                              <Button
-                                variant="destructive"
-                                onClick={handleRemoveMember}
-                                disabled={!canManage || memberSaving || memberRemoving}
-                              >
+                              <Button variant="destructive" onClick={handleRemoveMember} disabled={!canManage || memberSaving || memberRemoving}>
                                 {memberRemoving ? "מסיר..." : "הסרה מהארגון"}
                               </Button>
-                              <Button
-                                onClick={handleSaveMember}
-                                disabled={!canManage || memberSaving || memberRemoving}
-                                className="rounded-xl"
-                              >
+                              <Button onClick={handleSaveMember} disabled={!canManage || memberSaving || memberRemoving} className="rounded-xl">
                                 {memberSaving ? "שומר..." : "שמירת שינויים"}
                               </Button>
                             </div>
@@ -759,7 +526,7 @@ export default function OrganizationTeamPage() {
                             חברי הארגון
                           </CardTitle>
                           <CardDescription>
-                            זהו מוקד הניהול הראשי של צוות הארגון: חברים פעילים, תפקידים וטייטלים.
+                            זהו מוקד הניהול הראשי של צוות הארגון: חברים פעילים, תפקידים, ופרטי השיוך הארגוני שלהם.
                           </CardDescription>
                         </div>
                         <Badge variant="outline" className="rounded-full">
@@ -776,35 +543,26 @@ export default function OrganizationTeamPage() {
                       ) : members.length === 0 ? (
                         <Alert>
                           <AlertTitle>עדיין אין חברי צוות</AlertTitle>
-                          <AlertDescription>אפשר ליצור את המשתמש הראשון של הארגון מהפאנל הימני.</AlertDescription>
+                          <AlertDescription>אפשר ליצור את המשתמש הראשון של הארגון מהעמוד הייעודי ליצירת חבר חדש.</AlertDescription>
                         </Alert>
                       ) : (
                         <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-                          {members.map((member) => {
-                            const memberName =
-                              member.profile?.display_name?.trim() || member.title?.trim() || "חבר צוות"
-                            return (
-                              <button
-                                key={member.user_id}
-                                type="button"
-                                className="w-full text-right"
-                                onClick={() => setSelectedMemberId(member.user_id)}
-                              >
-                                <MemberCard
-                                  name={memberName}
-                                  meta={member.title?.trim() || "ללא תיאור תפקיד"}
-                                  avatarUrl={member.profile?.avatar_url ?? undefined}
-                                  initialsSource={member.profile?.display_name || member.title}
-                                  badgeLabel={member.role || "member"}
-                                  className={
-                                    selectedMemberId === member.user_id
-                                      ? "border-primary/50 bg-primary/5 ring-1 ring-primary/20"
-                                      : "border-border/70 bg-card transition-colors hover:border-primary/30"
-                                  }
-                                />
-                              </button>
-                            )
-                          })}
+                          {members.map((member) => (
+                            <button key={member.user_id} type="button" className="w-full text-right" onClick={() => setSelectedMemberId(member.user_id)}>
+                              <MemberCard
+                                name={member.profile?.display_name?.trim() || member.title?.trim() || "חבר צוות"}
+                                meta={member.title?.trim() || "ללא תיאור תפקיד"}
+                                avatarUrl={member.profile?.avatar_url ?? undefined}
+                                initialsSource={member.profile?.display_name || member.title}
+                                badgeLabel={member.role || "member"}
+                                className={
+                                  selectedMemberId === member.user_id
+                                    ? "border-primary/50 bg-primary/5 ring-1 ring-primary/20"
+                                    : "border-border/70 bg-card transition-colors hover:border-primary/30"
+                                }
+                              />
+                            </button>
+                          ))}
                         </div>
                       )}
                     </CardContent>

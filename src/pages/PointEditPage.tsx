@@ -10,8 +10,6 @@ import {
   InfoPanelDetailList,
   InfoPanelHeader,
   InfoPanelSection,
-  InfoPanelStat,
-  InfoPanelStats,
 } from "@/components/info-panel"
 import { PageBody, PageMainContent, PageMainLayout, PageMainRail } from "@/components/page-main-layout"
 import { SiteHeader } from "@/components/site-header"
@@ -353,12 +351,12 @@ export default function PointEditPage() {
           <div className="page-stack flex-1">
             {loadingOrganizations || loadingPoint ? (
               <PageMainLayout>
-                <PageMainContent>
-                  <Skeleton className="h-[28rem] rounded-3xl" />
-                </PageMainContent>
                 <PageMainRail>
                   <Skeleton className="h-[28rem] rounded-3xl" />
                 </PageMainRail>
+                <PageMainContent>
+                  <Skeleton className="h-[28rem] rounded-3xl" />
+                </PageMainContent>
               </PageMainLayout>
             ) : organizationsError || pointError ? (
               <Alert variant="destructive">
@@ -370,6 +368,33 @@ export default function PointEditPage() {
               </Alert>
             ) : (
               <PageMainLayout>
+                <PageMainRail>
+                  <InfoPanel>
+                    <InfoPanelHeader
+                      icon={MapPinned}
+                      title={pointName.trim() || (isCreateMode ? "נקודה חדשה" : `נקודה #${point?.id ?? "—"}`)}
+                      description={pointNotes.trim() || pageDescription}
+                      badge={
+                        <Badge variant={canEdit ? "default" : "outline"}>
+                          {isCreateMode ? "יצירה" : getStatusLabel(point?.status)}
+                        </Badge>
+                      }
+                    />
+                    <InfoPanelBody>
+                      <InfoPanelSection title="הקשר">
+                        <InfoPanelDetailList>
+                          <InfoPanelDetail
+                            label="ארגון"
+                            value={selectedOrganization?.name?.trim() || `ארגון #${selectedOrganization?.id ?? "—"}`}
+                          />
+                          {!isCreateMode && point ? (
+                            <InfoPanelDetail label="מזהה נקודה" value={point.id} />
+                          ) : null}
+                        </InfoPanelDetailList>
+                      </InfoPanelSection>
+                    </InfoPanelBody>
+                  </InfoPanel>
+                </PageMainRail>
                 <PageMainContent>
                   <Card className="border-border/70 shadow-none">
                     <CardHeader className="gap-3">
@@ -377,7 +402,11 @@ export default function PointEditPage() {
                         {isCreateMode ? <Plus className="size-5" /> : <PencilLine className="size-5" />}
                         {pageTitle}
                       </CardTitle>
-                      <CardDescription>{pageDescription}</CardDescription>
+                      <CardDescription>
+                        {isCreateMode
+                          ? "הגדירו שם ברור לנקודה והוסיפו תיאור קצר שיעזור לצוות להבין במה מדובר."
+                          : "עדכנו את פרטי הנקודה בצורה מסודרת, בלי להעמיס על עמוד הנקודה הראשי."}
+                      </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-5">
                       {!canEdit && !loadingPermissions ? (
@@ -386,49 +415,47 @@ export default function PointEditPage() {
                           <AlertDescription>{permissionDescription}</AlertDescription>
                         </Alert>
                       ) : null}
-
                       {saveError ? (
                         <Alert variant="destructive">
                           <AlertTitle>{isCreateMode ? "הנקודה לא נוצרה" : "הנקודה לא נשמרה"}</AlertTitle>
                           <AlertDescription>{saveError}</AlertDescription>
                         </Alert>
                       ) : null}
-
                       {saveMessage ? (
                         <Alert>
                           <AlertTitle>{isCreateMode ? "הנקודה נוצרה" : "הנקודה עודכנה"}</AlertTitle>
                           <AlertDescription>{saveMessage}</AlertDescription>
                         </Alert>
                       ) : null}
-
-                      <div className="space-y-2">
-                        <label htmlFor="point-name" className="text-sm font-medium">
-                          שם הנקודה
-                        </label>
-                        <Input
-                          id="point-name"
-                          value={pointName}
-                          onChange={(event) => setPointName(event.target.value)}
-                          disabled={loadingPermissions || !canEdit}
-                          placeholder="למשל: מרכז שירות דיזנגוף"
-                        />
+                      <div className="grid gap-5">
+                        <div className="space-y-2">
+                          <label htmlFor="point-name" className="text-sm font-medium">
+                            שם הנקודה
+                          </label>
+                          <Input
+                            id="point-name"
+                            value={pointName}
+                            onChange={(event) => setPointName(event.target.value)}
+                            disabled={loadingPermissions || !canEdit}
+                            placeholder="למשל: מרכז שירות דיזנגוף"
+                            className="h-11 rounded-2xl"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label htmlFor="point-notes" className="text-sm font-medium">
+                            תיאור / הערות
+                          </label>
+                          <textarea
+                            id="point-notes"
+                            value={pointNotes}
+                            onChange={(event) => setPointNotes(event.target.value)}
+                            disabled={loadingPermissions || !canEdit}
+                            className="min-h-44 w-full rounded-3xl border border-input bg-input/30 px-4 py-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
+                            placeholder="מה חשוב לדעת על הנקודה הזו?"
+                          />
+                        </div>
                       </div>
-
-                      <div className="space-y-2">
-                        <label htmlFor="point-notes" className="text-sm font-medium">
-                          תיאור / הערות
-                        </label>
-                        <textarea
-                          id="point-notes"
-                          value={pointNotes}
-                          onChange={(event) => setPointNotes(event.target.value)}
-                          disabled={loadingPermissions || !canEdit}
-                          className="min-h-40 w-full rounded-3xl border border-input bg-input/30 px-4 py-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
-                          placeholder="מה חשוב לדעת על הנקודה הזו?"
-                        />
-                      </div>
-
-                      <div className="flex flex-wrap justify-end gap-3">
+                      <div className="flex flex-wrap justify-end gap-3 border-t border-border/60 pt-4">
                         <Button variant="outline" onClick={handleBack} className="rounded-xl">
                           חזרה
                         </Button>
@@ -450,48 +477,6 @@ export default function PointEditPage() {
                     </CardContent>
                   </Card>
                 </PageMainContent>
-
-                <PageMainRail>
-                  <InfoPanel>
-                    <InfoPanelHeader
-                      icon={MapPinned}
-                      title={pointName.trim() || (isCreateMode ? "נקודה חדשה" : `נקודה #${point?.id ?? "—"}`)}
-                      description={pointNotes.trim() || pageDescription}
-                      badge={
-                        <Badge variant={canEdit ? "default" : "outline"}>
-                          {isCreateMode ? "יצירה" : getStatusLabel(point?.status)}
-                        </Badge>
-                      }
-                    />
-                    <InfoPanelBody>
-                      <InfoPanelStats>
-                        <InfoPanelStat
-                          label="ארגון"
-                          value={selectedOrganization?.name?.trim() || `ארגון #${selectedOrganization?.id ?? "—"}`}
-                          description="הנקודה תיווצר בתוך הארגון הפעיל שנבחר כעת."
-                        />
-                        <InfoPanelStat
-                          label="גישה"
-                          value={canEdit ? "מורשה" : "ללא הרשאה"}
-                          description={permissionDescription}
-                        />
-                      </InfoPanelStats>
-
-                      <InfoPanelSection title="מה יישמר?">
-                        <InfoPanelDetailList>
-                          <InfoPanelDetail label="שם נקודה" value={pointName.trim() || "טרם הוזן"} />
-                          <InfoPanelDetail
-                            label="תיאור"
-                            value={pointNotes.trim() || "טרם הוזן"}
-                          />
-                          {!isCreateMode && point ? (
-                            <InfoPanelDetail label="מזהה נקודה" value={point.id} />
-                          ) : null}
-                        </InfoPanelDetailList>
-                      </InfoPanelSection>
-                    </InfoPanelBody>
-                  </InfoPanel>
-                </PageMainRail>
               </PageMainLayout>
             )}
           </div>

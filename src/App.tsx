@@ -11,6 +11,7 @@ import TrackPage from "./pages/TrackPage";
 import PublicTrackPage from "./pages/PublicTrackPage";
 import TrackTypesPage from "./pages/TrackTypesPage";
 import OrganizationTeamPage from "./pages/OrganizationTeamPage";
+import OrganizationMemberCreatePage from "./pages/OrganizationMemberCreatePage";
 import ProfilePage from "./pages/ProfilePage";
 import HelpPage from "./pages/HelpPage";
 import SearchPage from "./pages/SearchPage";
@@ -50,6 +51,7 @@ function App() {
         <Route path="/help" element={<HelpPage />} />
         <Route path="/:organizationSlug" element={<Dashboard />} />
         <Route path="/:organizationSlug/team" element={<OrganizationTeamPage />} />
+        <Route path="/:organizationSlug/team/new" element={<OrganizationMemberCreatePage />} />
         <Route path="/:organizationSlug/track-types" element={<TrackTypesPage />} />
         <Route path="/:organizationSlug/points/new" element={<PointEditPage />} />
         <Route path="/:organizationSlug/:pointSlug/team" element={<PointTeamPage />} />
