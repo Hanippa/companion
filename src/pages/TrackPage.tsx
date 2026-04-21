@@ -1,12 +1,10 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react"
+﻿import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import {
-  Building2,
   CircleAlert,
+  PencilLine,
   Link2,
-  MapPinned,
   Route,
-  Rows3,
   TimerReset,
 } from "lucide-react"
 
@@ -32,8 +30,16 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { useAuth } from "@/contexts/AuthContext"
 import { getOrganizationSegment, getPointSegment, getRecordIdFromSegment, getTrackSegment } from "@/lib/drilldown"
@@ -723,11 +729,6 @@ export default function TrackPage() {
   const currentNodeLabel = track?.currentNode?.title || track?.currentStepKey || "לא הוגדר"
   const trackNodes = track?.trackSchema?.nodes ?? []
   const startNodeId = track?.trackSchema?.start_node_id ?? null
-  const pointDescription = track?.point?.notes?.trim() || "עדיין לא נוספו הערות לנקודה הזו."
-  const trackDescription =
-    track?.notes?.trim() ||
-    track?.trackSchema?.description?.trim() ||
-    "המסלול מוצג לפי הצמתים שהרשומה עברה בפועל, יחד עם האירועים ואפשרויות ההמשך מהצומת הנוכחי."
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -748,6 +749,17 @@ export default function TrackPage() {
       }),
     [events, now, track]
   )
+
+  const effectiveTrackSlaLabel = formatMinutesLabel(slaSummary.effectiveTrackSlaMinutes)
+  const effectiveTrackSlaDescription =
+    slaSummary.trackRemainingMs !== null
+      ? formatRemainingLabel(slaSummary.trackRemainingMs)
+      : "למסלול הזה לא הוגדר SLA."
+  const currentNodeSlaLabel =
+    slaSummary.currentNodeRemainingMs !== null
+      ? formatRemainingLabel(slaSummary.currentNodeRemainingMs)
+      : formatMinutesLabel(slaSummary.currentNodeSlaMinutes)
+  const slaModeLabel = track?.slaMode === "manual" ? "ידני" : "נגזר"
 
   const publicTrackUrl =
     track?.publicTrackingToken && typeof window !== "undefined"
@@ -812,7 +824,7 @@ export default function TrackPage() {
       )
     } catch (error) {
       console.error("Error updating track SLA:", error)
-      setTrackError("לא הצלחנו לעדכן את הגדרות ה־SLA כרגע.")
+      setTrackError("לא הצלחנו לעדכן את הגדרות ה-SLA כרגע.")
     } finally {
       setSavingSla(false)
     }
@@ -875,7 +887,11 @@ export default function TrackPage() {
                     <CardHeader className="gap-3">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="space-y-1">
-                          <div className="text-sm font-medium">התקדמות המסלול</div>
+                          <CardTitle className="text-xl">התקדמות המסלול</CardTitle>
+                          <CardDescription>
+                            כאן רואים את התקדמות המסלול בפועל, את אירועי המעבר ואת האפשרויות
+                            הזמינות מהשלב הנוכחי.
+                          </CardDescription>
                         </div>
                         <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background px-3 py-1 text-xs font-medium">
                           <span
@@ -891,9 +907,6 @@ export default function TrackPage() {
                           <span>{getRealtimeStatusLabel(realtimeStatus)}</span>
                         </div>
                       </div>
-                      <CardDescription>
-                        כל צומת מציג את האירועים שקרו בו בפועל, ואת אפשרויות ההמשך הזמינות מהצומת הנוכחי.
-                      </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <TrackStepper
@@ -912,184 +925,187 @@ export default function TrackPage() {
                 </PageMainContent>
 
                 <PageMainRail className="xl:order-1">
-                <InfoPanel>
-                  <InfoPanelHeader
-                    icon={Route}
-                    title={getTrackRecordTitle(track)}
-                    description={track.trackType?.name?.trim() || "מסלול פעיל"}
-                    badge={
-                      <Badge variant={track.status === "active" ? "default" : "secondary"}>
-                        {getStatusLabel(track.status)}
-                      </Badge>
-                    }
-                  />
-                  <InfoPanelBody>
-                    <InfoPanelSection icon={Route} title="פרטי מסלול">
-                      <InfoPanelDetailList>
-                        <InfoPanelDetail
-                          label="תיאור"
-                          value={trackDescription}
-                        />
-                        <InfoPanelDetail
-                          label="סוג מסלול"
-                          value={track.trackType?.name?.trim() || "—"}
-                        />
-                      </InfoPanelDetailList>
-                    </InfoPanelSection>
-
-                    <InfoPanelSection
-                      title="קישור ציבורי"
-                      description="שיתוף קישור מעקב ללקוח ללא כניסה למערכת."
-                      action={
-                        publicTrackUrl ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="rounded-xl"
-                            onClick={handleCopyPublicTrackLink}
-                          >
-                            <Link2 className="size-4" />
-                            {copiedPublicLink ? "הקישור הועתק" : "העתקת קישור"}
-                          </Button>
-                        ) : null
+                  <InfoPanel>
+                    <InfoPanelHeader
+                      icon={Route}
+                      title={getTrackRecordTitle(track)}
+                      description={track.trackType?.name?.trim() || "מסלול פעיל"}
+                      titleClassName="text-lg font-semibold leading-7"
+                      descriptionClassName="text-[13px] leading-6"
+                      iconClassName="size-4"
+                      badge={
+                        <Badge variant={track.status === "active" ? "default" : "secondary"}>
+                          {getStatusLabel(track.status)}
+                        </Badge>
                       }
-                    >
-                      <InfoPanelDetailList>
-                        <InfoPanelDetail
-                          label="קישור"
-                          value={
-                            publicTrackUrl ? (
-                              <span className="break-all text-left">{publicTrackUrl}</span>
-                            ) : (
-                              "לא נוצר עדיין טוקן ציבורי למסלול הזה."
-                            )
-                          }
+                    />
+                    <InfoPanelBody className="space-y-3.5">
+                      <InfoPanelStats>
+                        <InfoPanelStat
+                          icon={TimerReset}
+                          label="השלב הנוכחי"
+                          value={currentNodeLabel}
+                          description="זהו השלב הפעיל שממנו אפשר להמשיך."
+                          className="rounded-2xl bg-muted/15 px-4 py-3.5"
+                          labelClassName="text-[11px]"
+                          valueClassName="text-base leading-7"
+                          descriptionClassName="text-[11px]"
+                          iconClassName="size-3"
                         />
-                      </InfoPanelDetailList>
-                    </InfoPanelSection>
+                        <Sheet>
+                          <SheetTrigger asChild>
+                            <button
+                              type="button"
+                              className="group relative w-full cursor-pointer text-right"
+                              aria-label={canManageSla ? "פתיחת ניהול SLA" : "צפייה ב-SLA"}
+                            >
+                              <InfoPanelStat
+                                icon={TimerReset}
+                                label="SLA נוכחי"
+                                value={effectiveTrackSlaLabel}
+                                description={
+                                  <div className="space-y-1">
+                                    <div>{effectiveTrackSlaDescription}</div>
+                                    <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-foreground/80 transition-colors group-hover:text-foreground">
+                                      <PencilLine className="size-3" />
+                                      <span>{canManageSla ? "לחצו לניהול SLA" : "לחצו לצפייה בפרטי SLA"}</span>
+                                    </div>
+                                  </div>
+                                }
+                                className="rounded-2xl border-primary/20 bg-primary/5 px-4 py-3.5 transition-all hover:border-primary/40 hover:bg-primary/10"
+                                labelClassName="text-[11px] text-primary/80"
+                                valueClassName="text-base leading-7"
+                                descriptionClassName="text-[11px]"
+                                iconClassName="size-3 text-primary/80"
+                              />
+                            </button>
+                          </SheetTrigger>
+                          <SheetContent side="left" className="w-full sm:max-w-lg">
+                            <SheetHeader>
+                              <SheetTitle>ניהול SLA</SheetTitle>
+                              <SheetDescription>
+                                כאן אפשר לראות ולעדכן את הגדרות ה-SLA של המסלול, בלי להפריע
+                                לעבודה על ההתקדמות עצמה.
+                              </SheetDescription>
+                            </SheetHeader>
 
-                    <InfoPanelStats>
-                      <InfoPanelStat
-                        icon={TimerReset}
-                        label="צומת נוכחי"
-                        value={currentNodeLabel}
-                        description="זהו הצומת הפעיל שממנו אפשר להמשיך."
-                      />
-                      <InfoPanelStat
-                        icon={TimerReset}
-                        label="SLA למסלול"
-                        value={formatMinutesLabel(slaSummary.effectiveTrackSlaMinutes)}
-                        description={
-                          slaSummary.trackRemainingMs !== null
-                            ? formatRemainingLabel(slaSummary.trackRemainingMs)
-                            : "טרם הוגדר SLA למסלול"
+                            <div className="mt-6 space-y-5">
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
+                                  <div className="text-xs text-muted-foreground">מצב חישוב</div>
+                                  <div className="mt-2 text-sm font-medium">{slaModeLabel}</div>
+                                </div>
+                                <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
+                                  <div className="text-xs text-muted-foreground">SLA בסיסי</div>
+                                  <div className="mt-2 text-sm font-medium">
+                                    {formatMinutesLabel(track.sla ?? track.trackType?.sla ?? null)}
+                                  </div>
+                                </div>
+                                <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
+                                  <div className="text-xs text-muted-foreground">תוספות שנצברו</div>
+                                  <div className="mt-2 text-sm font-medium">
+                                    {formatMinutesLabel(slaSummary.modifierMinutes)}
+                                  </div>
+                                </div>
+                                <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
+                                  <div className="text-xs text-muted-foreground">SLA לשלב הנוכחי</div>
+                                  <div className="mt-2 text-sm font-medium">{currentNodeSlaLabel}</div>
+                                </div>
+                              </div>
+
+                              <div className="space-y-3 rounded-2xl border border-border/60 bg-background/70 p-4">
+                                <div className="space-y-1">
+                                  <div className="text-sm font-medium">הגדרות מסלול</div>
+                                  <div className="text-sm text-muted-foreground">
+                                    {canManageSla
+                                      ? "אפשר לעדכן את מצב החישוב ואת ערך ה-SLA הבסיסי של המסלול."
+                                      : "אפשר לצפות בהגדרות ה-SLA, אך העריכה זמינה רק למנהלי נקודה וארגון."}
+                                  </div>
+                                </div>
+
+                                <div className="grid gap-3">
+                                  <select
+                                    className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+                                    value={slaModeDraft}
+                                    onChange={(event) =>
+                                      setSlaModeDraft(event.target.value as "derived" | "manual")
+                                    }
+                                    disabled={!canManageSla || savingSla}
+                                  >
+                                    <option value="derived">נגזר · כולל תוספות של שלבים</option>
+                                    <option value="manual">ידני · בלי תוספות של שלבים</option>
+                                  </select>
+                                  <input
+                                    className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+                                    type="number"
+                                    min="0"
+                                    value={trackSlaDraft}
+                                    onChange={(event) => setTrackSlaDraft(event.target.value)}
+                                    disabled={!canManageSla || savingSla}
+                                    placeholder="SLA בדקות"
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="rounded-xl"
+                                    onClick={handleSaveSla}
+                                    disabled={!canManageSla || savingSla}
+                                  >
+                                    {savingSla ? "שומר..." : "שמירת SLA"}
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </SheetContent>
+                        </Sheet>
+                      </InfoPanelStats>
+
+                      <InfoPanelSection
+                        title="פרטי הרשומה"
+                        description="המידע שנאסף בעת פתיחת המסלול, מסודר לפי מקטעי הטופס."
+                        titleClassName="text-[13px]"
+                        descriptionClassName="text-xs leading-5"
+                        className="rounded-2xl bg-muted/15 p-4"
+                      >
+                        <TrackRecordData data={track.data} compact />
+                      </InfoPanelSection>
+
+                      <InfoPanelSection
+                        title="קישור ציבורי"
+                        description="שיתוף קישור מעקב ללקוח ללא כניסה למערכת."
+                        titleClassName="text-[13px]"
+                        descriptionClassName="text-xs leading-5"
+                        className="rounded-2xl bg-muted/15 p-4"
+                        action={
+                          publicTrackUrl ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="rounded-xl"
+                              onClick={handleCopyPublicTrackLink}
+                            >
+                              <Link2 className="size-4" />
+                              {copiedPublicLink ? "הקישור הועתק" : "העתקת קישור"}
+                            </Button>
+                          ) : null
                         }
-                      />
-                      <InfoPanelStat
-                        icon={Rows3}
-                        label="אירועים"
-                        value={events.length}
-                        description="כולל קידומי מסלול והערות כלליות."
-                      />
-                    </InfoPanelStats>
-
-                    <InfoPanelSection icon={MapPinned} title="הקשר נקודה">
-                      <InfoPanelDetailList>
-                        <InfoPanelDetail
-                          label="שם נקודה"
-                          value={track.point?.name?.trim() || `נקודה #${track.point?.id ?? "?"}`}
-                        />
-                        <InfoPanelDetail label="סטטוס" value={getStatusLabel(track.point?.status)} />
-                        <InfoPanelDetail label="תיאור" value={pointDescription} />
-                      </InfoPanelDetailList>
-                    </InfoPanelSection>
-
-                    <InfoPanelSection
-                      icon={TimerReset}
-                      title="ניהול SLA"
-                      description={
-                        canManageSla
-                          ? "אפשר לעדכן את מצב החישוב ואת ערך ה-SLA הבסיסי של המסלול."
-                          : "אפשר לצפות בנתוני ה-SLA, אך העריכה זמינה רק למנהלי נקודה ולמנהלי ארגון."
-                      }
-                    >
-                      <InfoPanelDetailList>
-                        <InfoPanelDetail
-                          label="מצב חישוב"
-                          value={track.slaMode === "manual" ? "Manual" : "Derived"}
-                        />
-                        <InfoPanelDetail
-                          label="SLA בסיסי"
-                          value={formatMinutesLabel(track.sla ?? track.trackType?.sla ?? null)}
-                        />
-                        <InfoPanelDetail
-                          label="Modifiers שנצברו"
-                          value={formatMinutesLabel(slaSummary.modifierMinutes)}
-                        />
-                        <InfoPanelDetail
-                          label="SLA לצומת נוכחי"
-                          value={
-                            slaSummary.currentNodeRemainingMs !== null
-                              ? formatRemainingLabel(slaSummary.currentNodeRemainingMs)
-                              : formatMinutesLabel(slaSummary.currentNodeSlaMinutes)
-                          }
-                        />
-                      </InfoPanelDetailList>
-                      <div className="mt-4 grid gap-3">
-                        <select
-                          className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
-                          value={slaModeDraft}
-                          onChange={(event) =>
-                            setSlaModeDraft(event.target.value as "derived" | "manual")
-                          }
-                          disabled={!canManageSla || savingSla}
-                        >
-                          <option value="derived">Derived · עם modifiers</option>
-                          <option value="manual">Manual · ללא modifiers</option>
-                        </select>
-                        <input
-                          className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
-                          type="number"
-                          min="0"
-                          value={trackSlaDraft}
-                          onChange={(event) => setTrackSlaDraft(event.target.value)}
-                          disabled={!canManageSla || savingSla}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="rounded-xl"
-                          onClick={handleSaveSla}
-                          disabled={!canManageSla || savingSla}
-                        >
-                          {savingSla ? "שומר..." : "שמירת SLA"}
-                        </Button>
-                      </div>
-                    </InfoPanelSection>
-
-                    <InfoPanelSection icon={Building2} title="הקשר ארגוני">
-                      <InfoPanelDetailList>
-                        <InfoPanelDetail
-                          label="ארגון"
-                          value={selectedOrganization?.name?.trim() || `ארגון #${selectedOrganization?.id ?? "?"}`}
-                        />
-                        <InfoPanelDetail
-                          label="מזהה חיצוני"
-                          value={track.refId}
-                        />
-                        <InfoPanelDetail
-                          label="גרסת תבנית"
-                          value={track.trackType?.vesrion ?? "—"}
-                        />
-                      </InfoPanelDetailList>
-                    </InfoPanelSection>
-
-                    <InfoPanelSection title="סיכום הרשומה">
-                      <TrackRecordData data={track.data} compact />
-                    </InfoPanelSection>
-                  </InfoPanelBody>
-                </InfoPanel>
+                      >
+                        <InfoPanelDetailList>
+                          <InfoPanelDetail
+                            label="קישור"
+                            value={
+                              publicTrackUrl ? (
+                                <span className="break-all text-left">{publicTrackUrl}</span>
+                              ) : (
+                                "עדיין לא נוצר קישור ציבורי למסלול הזה."
+                              )
+                            }
+                          />
+                        </InfoPanelDetailList>
+                      </InfoPanelSection>
+                    </InfoPanelBody>
+                  </InfoPanel>
                 </PageMainRail>
               </PageMainLayout>
             ) : (
@@ -1105,3 +1121,4 @@ export default function TrackPage() {
     </SidebarProvider>
   )
 }
+

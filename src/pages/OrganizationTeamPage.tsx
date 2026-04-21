@@ -30,6 +30,7 @@ import { getOrganizationSegment, getRecordIdFromSegment } from "@/lib/drilldown"
 import { getOrganizationsCached } from "@/lib/organizations"
 import { getProfilesByIdsCached } from "@/lib/profile-cache"
 import { supabase } from "@/lib/supabase"
+import { cn } from "@/lib/utils"
 
 type Organization = {
   id: number
@@ -59,13 +60,25 @@ type TeamMember = OrganizationMemberRow & {
 const ROLE_OPTIONS = [
   { value: "member", label: "חבר צוות" },
   { value: "admin", label: "מנהל ארגון" },
-  { value: "owner", label: "בעל ארגון" },
+  { value: "owner", label: "בעלים" },
 ]
 
 const STATUS_OPTIONS = [
   { value: "active", label: "פעיל" },
   { value: "inactive", label: "לא פעיל" },
 ]
+
+const getRoleLabel = (role: string | null) => {
+  switch (role) {
+    case "owner":
+      return "בעלים"
+    case "admin":
+      return "מנהל ארגון"
+    case "member":
+    default:
+      return "חבר צוות"
+  }
+}
 
 export default function OrganizationTeamPage() {
   const { user } = useAuth()
@@ -215,9 +228,8 @@ export default function OrganizationTeamPage() {
 
   useEffect(() => {
     setSelectedMemberId((current) => {
-      if (members.length === 0) return null
-      if (current && members.some((member) => member.user_id === current)) return current
-      return members[0]?.user_id ?? null
+      if (!current) return null
+      return members.some((member) => member.user_id === current) ? current : null
     })
   }, [members])
 
@@ -250,6 +262,16 @@ export default function OrganizationTeamPage() {
       })),
     [organizations]
   )
+
+  const groupedMembers = useMemo(() => {
+    const leadership = members.filter((member) => ["owner", "admin"].includes(member.role ?? "member"))
+    const regular = members.filter((member) => !["owner", "admin"].includes(member.role ?? "member"))
+
+    return [
+      { key: "leadership", title: "בעלים ומנהלים", members: leadership },
+      { key: "regular", title: "חברי צוות", members: regular },
+    ].filter((group) => group.members.length > 0)
+  }, [members])
 
   const handleOrganizationChange = (value: string) => {
     const nextOrganization = organizations.find((organization) => organization.id.toString() === value)
@@ -403,156 +425,179 @@ export default function OrganizationTeamPage() {
                       </CardContent>
                     </Card>
 
-                    <Card className="border-border/70 shadow-none">
-                      <CardHeader className="gap-3">
-                        <CardTitle className="flex items-center gap-2 text-xl">
-                          <Users2 className="size-5" />
-                          ניהול חבר קיים
-                        </CardTitle>
-                        <CardDescription>
-                          בחירת חבר מהרשימה תאפשר לעדכן שם, תפקיד, סטטוס והרשאות ארגוניות.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-5">
-                        {!selectedMember ? (
-                          <Alert>
-                            <AlertTitle>לא נבחר חבר צוות</AlertTitle>
-                            <AlertDescription>בחרו חבר צוות מהרשימה כדי לערוך אותו.</AlertDescription>
-                          </Alert>
-                        ) : (
-                          <>
-                            <div className="space-y-3 rounded-xl border border-border/60 bg-muted/15 p-3">
-                              <MemberCard
-                                name={selectedMember.profile?.display_name?.trim() || selectedMember.title?.trim() || "חבר צוות"}
-                                meta={selectedMember.title?.trim() || "ללא תיאור תפקיד"}
-                                avatarUrl={selectedMember.profile?.avatar_url ?? undefined}
-                                initialsSource={selectedMember.profile?.display_name || selectedMember.title}
-                                badgeLabel={selectedMember.role || "member"}
-                                className="border-border/70 bg-card"
-                              />
-                            </div>
-
-                            <div className="grid gap-4">
-                              <div className="space-y-2">
-                                <label className="text-sm font-medium">שם מלא</label>
-                                <Input value={memberDisplayName} onChange={(event) => setMemberDisplayName(event.target.value)} disabled={!canManage || memberSaving || memberRemoving} />
-                              </div>
-                              <div className="space-y-2">
-                                <label className="text-sm font-medium">טייטל</label>
-                                <Input value={memberTitle} onChange={(event) => setMemberTitle(event.target.value)} disabled={!canManage || memberSaving || memberRemoving} />
-                              </div>
-                              <div className="space-y-2">
-                                <label className="text-sm font-medium">תפקיד ארגוני</label>
-                                <Select value={memberRole} onValueChange={setMemberRole} disabled={!canManage || memberSaving || memberRemoving}>
-                                  <SelectTrigger className="rounded-xl">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent align="end">
-                                    {ROLE_OPTIONS.map((option) => (
-                                      <SelectItem key={option.value} value={option.value}>
-                                        {option.label}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-2">
-                                <label className="text-sm font-medium">סטטוס</label>
-                                <Select value={memberStatus} onValueChange={setMemberStatus} disabled={!canManage || memberSaving || memberRemoving}>
-                                  <SelectTrigger className="rounded-xl">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent align="end">
-                                    {STATUS_OPTIONS.map((option) => (
-                                      <SelectItem key={option.value} value={option.value}>
-                                        {option.label}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </div>
-
-                            {memberSaveError ? (
-                              <Alert variant="destructive">
-                                <AlertTitle>העדכון נכשל</AlertTitle>
-                                <AlertDescription>{memberSaveError}</AlertDescription>
-                              </Alert>
-                            ) : null}
-
-                            {memberSaveMessage ? (
-                              <Alert>
-                                <AlertTitle>העדכון בוצע</AlertTitle>
-                                <AlertDescription>{memberSaveMessage}</AlertDescription>
-                              </Alert>
-                            ) : null}
-
-                            <div className="flex items-center justify-between gap-3">
-                              <Button variant="destructive" onClick={handleRemoveMember} disabled={!canManage || memberSaving || memberRemoving}>
-                                {memberRemoving ? "מסיר..." : "הסרה מהארגון"}
-                              </Button>
-                              <Button onClick={handleSaveMember} disabled={!canManage || memberSaving || memberRemoving} className="rounded-xl">
-                                {memberSaving ? "שומר..." : "שמירת שינויים"}
-                              </Button>
-                            </div>
-                          </>
-                        )}
-                      </CardContent>
-                    </Card>
                   </div>
                 </PageMainRail>
 
                 <PageMainContent>
-                  <Card className="border-border/70 shadow-none">
-                    <CardHeader className="gap-3">
-                      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                        <div className="space-y-2">
+                  <div
+                    dir="ltr"
+                    className={cn(
+                      "grid gap-4",
+                      selectedMember && "xl:grid-cols-[minmax(22rem,0.82fr)_minmax(0,1.18fr)]"
+                    )}
+                  >
+                    {selectedMember ? (
+                      <Card dir="rtl" className="border-border/70 shadow-none xl:sticky xl:top-24 animate-in fade-in-0 zoom-in-95 slide-in-from-left-2 duration-200">
+                        <CardHeader className="gap-3">
                           <CardTitle className="flex items-center gap-2 text-xl">
                             <Users2 className="size-5" />
-                            חברי הארגון
+                            ניהול חבר קיים
                           </CardTitle>
                           <CardDescription>
-                            זהו מוקד הניהול הראשי של צוות הארגון: חברים פעילים, תפקידים, ופרטי השיוך הארגוני שלהם.
+                            כאן אפשר לעדכן את פרטי החבר שבחרתם מהרשימה.
                           </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-5">
+                          <div className="space-y-3 rounded-xl border border-border/60 bg-muted/15 p-3">
+                            <MemberCard
+                              name={selectedMember.profile?.display_name?.trim() || selectedMember.title?.trim() || "חבר צוות"}
+                              meta={selectedMember.title?.trim() || "ללא תיאור תפקיד"}
+                              avatarUrl={selectedMember.profile?.avatar_url ?? undefined}
+                              initialsSource={selectedMember.profile?.display_name || selectedMember.title}
+                              badgeLabel={getRoleLabel(selectedMember.role)}
+                              className="border-border/70 bg-card"
+                            />
+                          </div>
+
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">שם מלא</label>
+                              <Input value={memberDisplayName} onChange={(event) => setMemberDisplayName(event.target.value)} disabled={!canManage || memberSaving || memberRemoving} />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">טייטל</label>
+                              <Input value={memberTitle} onChange={(event) => setMemberTitle(event.target.value)} disabled={!canManage || memberSaving || memberRemoving} />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">תפקיד ארגוני</label>
+                              <Select value={memberRole} onValueChange={setMemberRole} disabled={!canManage || memberSaving || memberRemoving}>
+                                <SelectTrigger className="rounded-xl">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent align="end">
+                                  {ROLE_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">סטטוס</label>
+                              <Select value={memberStatus} onValueChange={setMemberStatus} disabled={!canManage || memberSaving || memberRemoving}>
+                                <SelectTrigger className="rounded-xl">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent align="end">
+                                  {STATUS_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+
+                          {memberSaveError ? (
+                            <Alert variant="destructive">
+                              <AlertTitle>העדכון נכשל</AlertTitle>
+                              <AlertDescription>{memberSaveError}</AlertDescription>
+                            </Alert>
+                          ) : null}
+
+                          {memberSaveMessage ? (
+                            <Alert>
+                              <AlertTitle>העדכון בוצע</AlertTitle>
+                              <AlertDescription>{memberSaveMessage}</AlertDescription>
+                            </Alert>
+                          ) : null}
+
+                          <div className="flex items-center justify-between gap-3">
+                            <Button variant="destructive" onClick={handleRemoveMember} disabled={!canManage || memberSaving || memberRemoving}>
+                              {memberRemoving ? "מסיר..." : "הסרה מהארגון"}
+                            </Button>
+                            <Button onClick={handleSaveMember} disabled={!canManage || memberSaving || memberRemoving} className="rounded-xl">
+                              {memberSaving ? "שומר..." : "שמירת שינויים"}
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : null}
+
+                    <Card dir="rtl" className="border-border/70 shadow-none">
+                      <CardHeader className="gap-3">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                          <div className="space-y-2">
+                            <CardTitle className="flex items-center gap-2 text-xl">
+                              <Users2 className="size-5" />
+                              חברי הארגון
+                            </CardTitle>
+                            <CardDescription>
+                              זהו מוקד הניהול הראשי של צוות הארגון: חברים פעילים, תפקידים, ופרטי השיוך הארגוני שלהם.
+                            </CardDescription>
+                          </div>
+                          <Badge variant="outline" className="rounded-full">
+                            סה"כ {members.length} חברים
+                          </Badge>
                         </div>
-                        <Badge variant="outline" className="rounded-full">
-                          סה"כ {members.length} חברים
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      {membersError ? (
-                        <Alert variant="destructive">
-                          <AlertTitle>אי אפשר לטעון את הצוות</AlertTitle>
-                          <AlertDescription>{membersError}</AlertDescription>
-                        </Alert>
-                      ) : members.length === 0 ? (
-                        <Alert>
-                          <AlertTitle>עדיין אין חברי צוות</AlertTitle>
-                          <AlertDescription>אפשר ליצור את המשתמש הראשון של הארגון מהעמוד הייעודי ליצירת חבר חדש.</AlertDescription>
-                        </Alert>
-                      ) : (
-                        <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-                          {members.map((member) => (
-                            <button key={member.user_id} type="button" className="w-full text-right" onClick={() => setSelectedMemberId(member.user_id)}>
-                              <MemberCard
-                                name={member.profile?.display_name?.trim() || member.title?.trim() || "חבר צוות"}
-                                meta={member.title?.trim() || "ללא תיאור תפקיד"}
-                                avatarUrl={member.profile?.avatar_url ?? undefined}
-                                initialsSource={member.profile?.display_name || member.title}
-                                badgeLabel={member.role || "member"}
-                                className={
-                                  selectedMemberId === member.user_id
-                                    ? "border-primary/50 bg-primary/5 ring-1 ring-primary/20"
-                                    : "border-border/70 bg-card transition-colors hover:border-primary/30"
-                                }
-                              />
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {membersError ? (
+                          <Alert variant="destructive">
+                            <AlertTitle>אי אפשר לטעון את הצוות</AlertTitle>
+                            <AlertDescription>{membersError}</AlertDescription>
+                          </Alert>
+                        ) : members.length === 0 ? (
+                          <Alert>
+                            <AlertTitle>עדיין אין חברי צוות</AlertTitle>
+                            <AlertDescription>אפשר ליצור את המשתמש הראשון של הארגון מהעמוד הייעודי ליצירת חבר חדש.</AlertDescription>
+                          </Alert>
+                        ) : (
+                          <div className="space-y-5">
+                            {groupedMembers.map((group) => (
+                              <div key={group.key} className="space-y-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="text-sm font-medium">{group.title}</div>
+                                  <Badge variant="outline" className="rounded-full">
+                                    {group.members.length}
+                                  </Badge>
+                                </div>
+                                <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                                  {group.members.map((member) => (
+                                    <button
+                                      key={member.user_id}
+                                      type="button"
+                                      className="w-full text-right"
+                                      onClick={() =>
+                                        setSelectedMemberId((current) =>
+                                          current === member.user_id ? null : member.user_id
+                                        )
+                                      }
+                                    >
+                                      <MemberCard
+                                        name={member.profile?.display_name?.trim() || member.title?.trim() || "חבר צוות"}
+                                        meta={member.title?.trim() || "ללא תיאור תפקיד"}
+                                        avatarUrl={member.profile?.avatar_url ?? undefined}
+                                        initialsSource={member.profile?.display_name || member.title}
+                                        badgeLabel={getRoleLabel(member.role)}
+                                        className={
+                                          selectedMemberId === member.user_id
+                                            ? "border-primary/50 bg-primary/5 ring-1 ring-primary/20"
+                                            : "border-border/70 bg-card transition-colors hover:border-primary/30"
+                                        }
+                                      />
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
                 </PageMainContent>
               </PageMainLayout>
             )}

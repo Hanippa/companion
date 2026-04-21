@@ -779,7 +779,7 @@ function OrganizationMembersList({
     <div className="space-y-3">
       <div className="rounded-2xl border border-border/60 bg-background/80 p-2">
         <div className="mb-2 flex items-center justify-between gap-3 px-2 py-1">
-          <div className="text-xs text-muted-foreground">חברי צוות שמוצגים כעת</div>
+          <div className="text-xs text-muted-foreground">חברי צוות</div>
           <Badge variant="secondary" className="rounded-full px-2.5 py-0.5 text-[11px]">
             {totalCount}
           </Badge>

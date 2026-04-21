@@ -92,7 +92,7 @@ export function LoginForm({
     <div className={cn("flex flex-col gap-6 font-fredoka", className)} {...props}>
       <div className="flex items-center justify-center gap-2">
         <div className="flex items-center justify-center">
-          <div className="text-3xl font-light">companion</div>
+          <div className="text-3xl font-light">Trace</div>
         </div>
         <img className="size-8" src={Logo} alt="" />
       </div>

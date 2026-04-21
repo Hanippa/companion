@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 
 type TrackNodeSlaIndicatorProps = {
   slaMinutes: number | null
+  elapsedMs?: number | null
   remainingMs?: number | null
   progressPercent?: number
   isOverdue?: boolean
@@ -32,23 +33,27 @@ const formatCountdownClock = (remainingMs: number | null | undefined) => {
 
 export function TrackNodeSlaIndicator({
   slaMinutes,
+  elapsedMs = null,
   remainingMs = null,
   progressPercent = 0,
   isOverdue = false,
   status,
   className,
 }: TrackNodeSlaIndicatorProps) {
+  if (typeof slaMinutes !== "number" || !Number.isFinite(slaMinutes) || slaMinutes <= 0) {
+    return null
+  }
+
   const clampedProgress =
-    status === "completed"
-      ? 100
-      : status === "pending"
-        ? 0
-        : Math.max(0, Math.min(100, progressPercent))
+    status === "pending" ? 0 : Math.max(0, Math.min(100, progressPercent))
 
   const countdownClock = status === "current" ? formatCountdownClock(remainingMs) : null
+  const elapsedMinutesLabel =
+    elapsedMs !== null ? formatMinutesLabel(Math.max(1, Math.ceil(elapsedMs / 60000))) : null
+
   const summaryLabel =
     status === "completed"
-      ? "הצומת הושלם"
+      ? `נמשך ${elapsedMinutesLabel ?? "לא זמין"}`
       : status === "pending"
         ? `יעד משוער: ${formatMinutesLabel(slaMinutes)}`
         : formatRemainingLabel(remainingMs)
@@ -67,7 +72,8 @@ export function TrackNodeSlaIndicator({
               isOverdue ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"
             )}
           >
-            {isOverdue ? "חריגה " : ""}{countdownClock}
+            {isOverdue ? "חריגה " : ""}
+            {countdownClock}
           </div>
         ) : null}
       </div>
@@ -77,7 +83,8 @@ export function TrackNodeSlaIndicator({
           <div
             className={cn(
               "h-full rounded-full transition-[width] duration-500",
-              status === "completed" && "bg-primary/80",
+              status === "completed" && !isOverdue && "bg-primary/80",
+              status === "completed" && isOverdue && "bg-destructive/80",
               status === "pending" && "bg-muted-foreground/30",
               status === "current" && !isOverdue && "bg-primary animate-pulse",
               status === "current" && isOverdue && "bg-destructive animate-pulse"

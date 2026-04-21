@@ -121,7 +121,11 @@ function renderValue(value: unknown, compact: boolean) {
         {value.map((group, index) => (
           <div
             key={`${group.group_label}-${index}`}
-            className={compact ? "rounded-2xl bg-muted/35 px-3 py-2.5" : "rounded-2xl border border-border/50 bg-background/70 p-4"}
+            className={
+              compact
+                ? "rounded-2xl bg-muted/35 px-3 py-2.5"
+                : "rounded-2xl border border-border/50 bg-background/70 p-4"
+            }
           >
             <div className="text-[11px] font-medium text-muted-foreground">{group.group_label}</div>
             <div className="mt-1.5 text-sm leading-6 text-foreground">{group.items.join(", ")}</div>
@@ -132,7 +136,11 @@ function renderValue(value: unknown, compact: boolean) {
   }
 
   if (Array.isArray(value)) {
-    return <div className="text-sm leading-6 text-foreground">{value.map((item) => formatScalarValue(item)).join(", ")}</div>
+    return (
+      <div className="text-sm leading-6 text-foreground">
+        {value.map((item) => formatScalarValue(item)).join(", ")}
+      </div>
+    )
   }
 
   if (isObjectRecord(value)) {
@@ -157,7 +165,11 @@ function renderValue(value: unknown, compact: boolean) {
     )
   }
 
-  return <div className={compact ? "text-sm leading-6 text-foreground" : "text-sm leading-6 text-muted-foreground"}>{formatScalarValue(value)}</div>
+  return (
+    <div className={compact ? "text-sm leading-6 text-foreground" : "text-sm leading-6 text-muted-foreground"}>
+      {formatScalarValue(value)}
+    </div>
+  )
 }
 
 function GenericDataFallback({ data, compact = false }: { data: Record<string, unknown>; compact?: boolean }) {

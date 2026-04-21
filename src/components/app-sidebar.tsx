@@ -159,19 +159,15 @@ export function AppSidebar({
             <SidebarMenuButton
               asChild
               size="lg"
-              className="data-[slot=sidebar-menu-button]:!p-2"
+              className="data-[slot=sidebar-menu-button]:!h-auto data-[slot=sidebar-menu-button]:!px-2.5 data-[slot=sidebar-menu-button]:!py-2"
             >
-              <Link to="/dashboard" className="flex items-center gap-3">
-                <div className="flex size-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
-                  <img className="size-5 shrink-0" src={Logo} alt="" />
+              <Link to="/dashboard" className="flex items-center gap-2 rounded-xl pb-1">
+                <div className="flex size-7 items-center justify-center text-primary">
+                  <img className="size-7 shrink-0" src={Logo} alt="" />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold leading-none">
-                    companion
-                  </div>
-                  <div className="truncate pt-1 text-xs text-sidebar-foreground/70">
-                    סביבת עבודה חכמה
-                  </div>
+                <div className="min-w-0">
+                  <div className="truncate text-xl leading-none text-sidebar-foreground">trace</div>
+                  <div className="truncate text-xs text-sidebar-foreground/65">מעקב תהליכים חכם</div>
                 </div>
               </Link>
             </SidebarMenuButton>

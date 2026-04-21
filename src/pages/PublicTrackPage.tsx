@@ -311,7 +311,7 @@ export default function PublicTrackPage() {
       <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8 flex items-center justify-between gap-3">
           <div className="space-y-1">
-            <div className="text-sm font-medium text-primary">companion</div>
+            <div className="text-sm font-medium text-primary">Trace</div>
             <div className="text-sm text-muted-foreground">מעקב ציבורי אחר סטטוס הטיפול</div>
           </div>
           <Button asChild variant="outline" size="sm">
@@ -368,25 +368,29 @@ export default function PublicTrackPage() {
                       <div className="text-xs text-muted-foreground">נקודה מטפלת</div>
                       <div className="mt-2 text-sm font-medium">{track.point?.name?.trim() || "—"}</div>
                     </div>
-                    <div className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-3">
-                      <div className="text-xs text-muted-foreground">SLA למסלול</div>
-                      <div className="mt-2 text-sm font-medium">
-                        {formatMinutesLabel(slaSummary.effectiveTrackSlaMinutes)}
+                    {slaSummary.effectiveTrackSlaMinutes !== null ? (
+                      <div className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-3">
+                        <div className="text-xs text-muted-foreground">SLA למסלול</div>
+                        <div className="mt-2 text-sm font-medium">
+                          {formatMinutesLabel(slaSummary.effectiveTrackSlaMinutes)}
+                        </div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {slaSummary.trackRemainingMs !== null
+                            ? formatRemainingLabel(slaSummary.trackRemainingMs)
+                            : "טרם הוגדר SLA"}
+                        </div>
                       </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {slaSummary.trackRemainingMs !== null
-                          ? formatRemainingLabel(slaSummary.trackRemainingMs)
-                          : "טרם הוגדר SLA"}
+                    ) : null}
+                    {slaSummary.currentNodeSlaMinutes !== null ? (
+                      <div className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-3">
+                        <div className="text-xs text-muted-foreground">SLA לצומת נוכחי</div>
+                        <div className="mt-2 text-sm font-medium">
+                          {slaSummary.currentNodeRemainingMs !== null
+                            ? formatRemainingLabel(slaSummary.currentNodeRemainingMs)
+                            : formatMinutesLabel(slaSummary.currentNodeSlaMinutes)}
+                        </div>
                       </div>
-                    </div>
-                    <div className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-3">
-                      <div className="text-xs text-muted-foreground">SLA לצומת נוכחי</div>
-                      <div className="mt-2 text-sm font-medium">
-                        {slaSummary.currentNodeRemainingMs !== null
-                          ? formatRemainingLabel(slaSummary.currentNodeRemainingMs)
-                          : formatMinutesLabel(slaSummary.currentNodeSlaMinutes)}
-                      </div>
-                    </div>
+                    ) : null}
                   </div>
                 </div>
               </CardHeader>
@@ -454,7 +458,11 @@ export default function PublicTrackPage() {
                                   : "border-border bg-background text-muted-foreground",
                             ].join(" ")}
                           >
-                            {isCurrent ? <CircleDot className="size-4" /> : <PackageCheck className="size-4" />}
+                            {isCurrent ? (
+                              <CircleDot className="size-4" />
+                            ) : (
+                              <PackageCheck className="size-4" />
+                            )}
                           </div>
                         </div>
 
@@ -476,11 +484,12 @@ export default function PublicTrackPage() {
                           <TrackNodeSlaIndicator
                             className="mt-4"
                             slaMinutes={node.sla ?? null}
+                            elapsedMs={isCurrent || isCompleted ? nodeSlaSnapshot.elapsedMs : null}
                             remainingMs={isCurrent ? nodeSlaSnapshot.remainingMs : null}
                             progressPercent={
-                              isCurrent ? nodeSlaSnapshot.progressPercent : isCompleted ? 100 : 0
+                              isCurrent || isCompleted ? nodeSlaSnapshot.progressPercent : 0
                             }
-                            isOverdue={isCurrent ? nodeSlaSnapshot.isOverdue : false}
+                            isOverdue={isCurrent || isCompleted ? nodeSlaSnapshot.isOverdue : false}
                             status={isCurrent ? "current" : isCompleted ? "completed" : "pending"}
                           />
 

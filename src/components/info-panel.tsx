@@ -37,23 +37,31 @@ export function InfoPanelHeader({
   description,
   badge,
   className,
+  titleClassName,
+  descriptionClassName,
+  iconClassName,
 }: {
   icon?: LucideIcon
   title: React.ReactNode
   description?: React.ReactNode
   badge?: React.ReactNode
   className?: string
+  titleClassName?: string
+  descriptionClassName?: string
+  iconClassName?: string
 }) {
   return (
     <CardHeader className={cn("gap-3", className)}>
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-2">
-          <CardTitle className="flex items-center gap-2 text-2xl">
-            {Icon ? <Icon className="size-5 text-muted-foreground" /> : null}
+          <CardTitle className={cn("flex items-center gap-2 text-2xl", titleClassName)}>
+            {Icon ? <Icon className={cn("size-5 text-muted-foreground", iconClassName)} /> : null}
             <span>{title}</span>
           </CardTitle>
           {description ? (
-            <CardDescription className="leading-7">{description}</CardDescription>
+            <CardDescription className={cn("leading-7", descriptionClassName)}>
+              {description}
+            </CardDescription>
           ) : null}
         </div>
         {badge ? <div className="shrink-0">{badge}</div> : null}
@@ -80,12 +88,20 @@ export function InfoPanelStat({
   value,
   description,
   className,
+  labelClassName,
+  valueClassName,
+  descriptionClassName,
+  iconClassName,
 }: {
   icon?: LucideIcon
   label: React.ReactNode
   value: React.ReactNode
   description?: React.ReactNode
   className?: string
+  labelClassName?: string
+  valueClassName?: string
+  descriptionClassName?: string
+  iconClassName?: string
 }) {
   return (
     <div
@@ -94,13 +110,15 @@ export function InfoPanelStat({
         className
       )}
     >
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        {Icon ? <Icon className="size-4" /> : null}
+      <div className={cn("flex items-center gap-2 text-sm text-muted-foreground", labelClassName)}>
+        {Icon ? <Icon className={cn("size-4", iconClassName)} /> : null}
         <span>{label}</span>
       </div>
-      <div className="mt-2 text-2xl font-semibold">{value}</div>
+      <div className={cn("mt-2 text-2xl font-semibold", valueClassName)}>{value}</div>
       {description ? (
-        <div className="mt-1 text-xs text-muted-foreground">{description}</div>
+        <div className={cn("mt-1 text-xs text-muted-foreground", descriptionClassName)}>
+          {description}
+        </div>
       ) : null}
     </div>
   )
@@ -113,11 +131,17 @@ export function InfoPanelSection({
   action,
   className,
   children,
+  titleClassName,
+  descriptionClassName,
+  iconClassName,
 }: React.ComponentProps<"div"> & {
   icon?: LucideIcon
   title?: React.ReactNode
   description?: React.ReactNode
   action?: React.ReactNode
+  titleClassName?: string
+  descriptionClassName?: string
+  iconClassName?: string
 }) {
   return (
     <div
@@ -127,13 +151,15 @@ export function InfoPanelSection({
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">
             {title ? (
-              <div className="flex items-center gap-2 text-sm font-medium">
-                {Icon ? <Icon className="size-4 text-primary" /> : null}
+              <div className={cn("flex items-center gap-2 text-sm font-medium", titleClassName)}>
+                {Icon ? <Icon className={cn("size-4 text-primary", iconClassName)} /> : null}
                 <span>{title}</span>
               </div>
             ) : null}
             {description ? (
-              <div className="text-sm text-muted-foreground">{description}</div>
+              <div className={cn("text-sm text-muted-foreground", descriptionClassName)}>
+                {description}
+              </div>
             ) : null}
           </div>
           {action ? <div className="shrink-0">{action}</div> : null}

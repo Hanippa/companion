@@ -27,6 +27,7 @@ export type TrackSlaSummary = {
 
 export type NodeSlaSnapshot = {
   startedAt: string | null
+  completedAt: string | null
   slaMinutes: number | null
   elapsedMs: number | null
   remainingMs: number | null
@@ -35,6 +36,14 @@ export type NodeSlaSnapshot = {
 }
 
 const MINUTE_MS = 60 * 1000
+
+const normalizeSlaMinutes = (minutes: number | null | undefined) => {
+  if (typeof minutes !== "number" || !Number.isFinite(minutes) || minutes <= 0) {
+    return null
+  }
+
+  return minutes
+}
 
 const getTimestamp = (value: string | null | undefined) => {
   if (!value) return null
@@ -54,11 +63,13 @@ export const normalizeSlaMode = (value: string | null | undefined): SlaMode =>
   value === "manual" ? "manual" : "derived"
 
 export const formatMinutesLabel = (minutes: number | null | undefined) => {
-  if (typeof minutes !== "number" || !Number.isFinite(minutes)) {
+  const normalizedMinutes = normalizeSlaMinutes(minutes)
+
+  if (normalizedMinutes === null) {
     return "לא הוגדר"
   }
 
-  const absoluteMinutes = Math.max(0, Math.round(minutes))
+  const absoluteMinutes = Math.max(0, Math.round(normalizedMinutes))
   const days = Math.floor(absoluteMinutes / 1440)
   const hours = Math.floor((absoluteMinutes % 1440) / 60)
   const remainingMinutes = absoluteMinutes % 60
@@ -123,6 +134,27 @@ const getNodeEntryTimestamp = (
   return null
 }
 
+const getNodeExitTimestamp = (
+  nodeId: string | null,
+  events: TrackEventLike[]
+) => {
+  if (!nodeId) return null
+
+  for (let index = 0; index < events.length; index += 1) {
+    const event = events[index]
+    if (event.event_type !== "step_advance") continue
+
+    const fromNodeId = getPayloadString(event.payload, "from_node_id") ?? event.step_key
+    const toNodeId = getPayloadString(event.payload, "to_node_id")
+
+    if (fromNodeId === nodeId && toNodeId !== nodeId) {
+      return getTimestamp(event.created_at)
+    }
+  }
+
+  return null
+}
+
 export const calculateNodeSlaSnapshot = ({
   schema,
   events,
@@ -142,19 +174,22 @@ export const calculateNodeSlaSnapshot = ({
       ? schema.nodes.find((candidate) => candidate.id === schema.start_node_id) ?? null
       : null)
   const startedAtTs = getNodeEntryTimestamp(nodeId, schema, events, createdAt)
-  const slaMinutes =
-    typeof node?.sla === "number" && Number.isFinite(node.sla) ? node.sla : null
-  const elapsedMs = startedAtTs !== null ? Math.max(0, now - startedAtTs) : null
+  const completedAtTs = getNodeExitTimestamp(nodeId, events)
+  const slaMinutes = normalizeSlaMinutes(node?.sla)
+  const effectiveEndTs = completedAtTs ?? now
+  const elapsedMs =
+    startedAtTs !== null ? Math.max(0, effectiveEndTs - startedAtTs) : null
   const remainingMs =
     slaMinutes !== null && elapsedMs !== null ? slaMinutes * MINUTE_MS - elapsedMs : null
 
   const rawProgressPercent =
-    slaMinutes !== null && elapsedMs !== null && slaMinutes > 0
+    slaMinutes !== null && elapsedMs !== null
       ? (elapsedMs / (slaMinutes * MINUTE_MS)) * 100
       : 0
 
   return {
     startedAt: startedAtTs !== null ? new Date(startedAtTs).toISOString() : null,
+    completedAt: completedAtTs !== null ? new Date(completedAtTs).toISOString() : null,
     slaMinutes,
     elapsedMs,
     remainingMs,
@@ -185,10 +220,7 @@ const getVisitedNodes = (
     pushNode(getPayloadString(event.payload, "to_node_id") ?? event.step_key)
   }
 
-  if (
-    currentNodeId &&
-    visitedNodes[visitedNodes.length - 1]?.id !== currentNodeId
-  ) {
+  if (currentNodeId && visitedNodes[visitedNodes.length - 1]?.id !== currentNodeId) {
     pushNode(currentNodeId)
   }
 
@@ -213,6 +245,7 @@ export const calculateTrackSlaSummary = ({
   now?: number
 }): TrackSlaSummary => {
   const mode = normalizeSlaMode(slaMode)
+  const normalizedBaseSlaMinutes = normalizeSlaMinutes(baseSlaMinutes)
   const trackStartedAtTs = getTrackStartTimestamp(createdAt, events)
   const currentNodeStartedAtTs = getNodeEntryTimestamp(currentNodeId, schema, events, createdAt)
   const currentNode =
@@ -230,21 +263,15 @@ export const calculateTrackSlaSummary = ({
         )
 
   const effectiveTrackSlaMinutes =
-    typeof baseSlaMinutes === "number" && Number.isFinite(baseSlaMinutes)
-      ? baseSlaMinutes + modifierMinutes
-      : null
+    normalizedBaseSlaMinutes !== null ? normalizedBaseSlaMinutes + modifierMinutes : null
 
-  const trackElapsedMs =
-    trackStartedAtTs !== null ? Math.max(0, now - trackStartedAtTs) : null
+  const trackElapsedMs = trackStartedAtTs !== null ? Math.max(0, now - trackStartedAtTs) : null
   const trackRemainingMs =
     effectiveTrackSlaMinutes !== null && trackElapsedMs !== null
       ? effectiveTrackSlaMinutes * MINUTE_MS - trackElapsedMs
       : null
 
-  const currentNodeSlaMinutes =
-    typeof currentNode?.sla === "number" && Number.isFinite(currentNode.sla)
-      ? currentNode.sla
-      : null
+  const currentNodeSlaMinutes = normalizeSlaMinutes(currentNode?.sla)
   const currentNodeElapsedMs =
     currentNodeStartedAtTs !== null ? Math.max(0, now - currentNodeStartedAtTs) : null
   const currentNodeRemainingMs =
@@ -254,7 +281,7 @@ export const calculateTrackSlaSummary = ({
 
   return {
     mode,
-    baseSlaMinutes,
+    baseSlaMinutes: normalizedBaseSlaMinutes,
     modifierMinutes,
     effectiveTrackSlaMinutes,
     trackStartedAt: trackStartedAtTs !== null ? new Date(trackStartedAtTs).toISOString() : null,
@@ -265,8 +292,7 @@ export const calculateTrackSlaSummary = ({
     trackRemainingMs,
     currentNodeElapsedMs,
     currentNodeRemainingMs,
-    isTrackOverdue:
-      typeof trackRemainingMs === "number" ? trackRemainingMs < 0 : false,
+    isTrackOverdue: typeof trackRemainingMs === "number" ? trackRemainingMs < 0 : false,
     isCurrentNodeOverdue:
       typeof currentNodeRemainingMs === "number" ? currentNodeRemainingMs < 0 : false,
   }

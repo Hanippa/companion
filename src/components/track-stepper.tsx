@@ -168,6 +168,7 @@ function NodeCard({
   isCurrent,
   isCompleted,
   pendingTransitionId,
+  nodeElapsedMs = null,
   nodeSlaProgress = 0,
   nodeRemainingMs = null,
   isNodeOverdue = false,
@@ -179,6 +180,7 @@ function NodeCard({
   isCurrent: boolean
   isCompleted: boolean
   pendingTransitionId: string | null
+  nodeElapsedMs?: number | null
   nodeSlaProgress?: number
   nodeRemainingMs?: number | null
   isNodeOverdue?: boolean
@@ -228,9 +230,10 @@ function NodeCard({
         <TrackNodeSlaIndicator
           className="pt-1"
           slaMinutes={node.sla ?? null}
+          elapsedMs={isCurrent || isCompleted ? nodeElapsedMs : null}
           remainingMs={isCurrent ? nodeRemainingMs : null}
-          progressPercent={isCurrent ? nodeSlaProgress : isCompleted ? 100 : 0}
-          isOverdue={isCurrent ? isNodeOverdue : false}
+          progressPercent={isCurrent || isCompleted ? nodeSlaProgress : 0}
+          isOverdue={isCurrent || isCompleted ? isNodeOverdue : false}
           status={isCurrent ? "current" : isCompleted ? "completed" : "pending"}
         />
 
@@ -390,10 +393,11 @@ export function TrackStepper({
               events={eventsByNode.get(node.id) ?? []}
               isCurrent={isCurrent}
               isCompleted={isCompleted}
-              pendingTransitionId={pendingTransitionId}
-              nodeSlaProgress={nodeSlaSnapshot.progressPercent}
-              nodeRemainingMs={nodeSlaSnapshot.remainingMs}
-              isNodeOverdue={nodeSlaSnapshot.isOverdue}
+          pendingTransitionId={pendingTransitionId}
+          nodeElapsedMs={nodeSlaSnapshot.elapsedMs}
+          nodeSlaProgress={nodeSlaSnapshot.progressPercent}
+          nodeRemainingMs={nodeSlaSnapshot.remainingMs}
+          isNodeOverdue={nodeSlaSnapshot.isOverdue}
               slaMode={slaMode}
               onTransitionSelect={onTransitionSelect}
             />
