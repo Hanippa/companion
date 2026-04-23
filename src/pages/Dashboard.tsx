@@ -517,7 +517,7 @@ export default function Dashboard() {
                             <InfoPanelSection
                               icon={Sparkles}
                               title="פעולות מהירות"
-                              description="הפעולות המרכזיות של הארגון מרוכזות כאן לגישה מהירה ונקייה יותר."
+                              description="הפעולות המרכזיות של הארגון ."
                             >
                               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
                                 <Button
@@ -560,7 +560,7 @@ export default function Dashboard() {
                           <InfoPanelSection
                             icon={Users2}
                             title="חברי ארגון"
-                            description="תצוגה מקוצרת של חברי הצוות הפעילים בארגון."
+                            description="חברי הצוות הפעילים בארגון."
                           >
                             <OrganizationMembersList
                               members={displayedOrganizationMembers}
@@ -586,8 +586,7 @@ export default function Dashboard() {
                                 נקודות הארגון
                               </CardTitle>
                               <CardDescription className="max-w-2xl leading-7">
-                                כל נקודה מציגה את המידע המרכזי שלה, את חברי הצוות הפעילים, ואת
-                                כמות המסלולים הקיימים בה.
+                                הנקודות הפעילות בארגון.
                               </CardDescription>
                             </div>
 
