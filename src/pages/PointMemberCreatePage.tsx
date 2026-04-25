@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react"
+import { useDeferredValue, useEffect, useMemo, useState, type CSSProperties } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { CircleAlert, MapPinned, UserPlus } from "lucide-react"
 
@@ -19,13 +19,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { useAuth } from "@/contexts/AuthContext"
@@ -78,6 +72,8 @@ const ROLE_OPTIONS = [
   { value: "admin", label: "מנהל נקודה" },
 ]
 
+const MEMBER_PICKER_PAGE_SIZE = 24
+
 const formatMemberName = (member: CandidateMember) =>
   member.profile?.display_name?.trim() || member.title?.trim() || "משתמש ארגוני"
 
@@ -97,12 +93,15 @@ export default function PointMemberCreatePage() {
   const [canManageTeam, setCanManageTeam] = useState(false)
   const [availableMembers, setAvailableMembers] = useState<CandidateMember[]>([])
   const [loadingMembers, setLoadingMembers] = useState(true)
+  const [memberSearchQuery, setMemberSearchQuery] = useState("")
+  const [memberPickerPage, setMemberPickerPage] = useState(1)
   const [selectedUserId, setSelectedUserId] = useState("")
   const [title, setTitle] = useState("")
   const [role, setRole] = useState("member")
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  const deferredMemberSearchQuery = useDeferredValue(memberSearchQuery.trim())
 
   useEffect(() => {
     let isMounted = true
@@ -271,6 +270,10 @@ export default function PointMemberCreatePage() {
     }
   }, [navigate, pointIdFromRoute, selectedOrganization, user?.id])
 
+  useEffect(() => {
+    setMemberPickerPage(1)
+  }, [deferredMemberSearchQuery])
+
   const organizationOptions = useMemo(
     () =>
       organizations.map((organization) => ({
@@ -279,6 +282,44 @@ export default function PointMemberCreatePage() {
       })),
     [organizations]
   )
+
+  const filteredAvailableMembers = useMemo(() => {
+    if (!deferredMemberSearchQuery) return availableMembers
+
+    const normalizedQuery = deferredMemberSearchQuery.toLocaleLowerCase("he")
+
+    return availableMembers.filter((member) => {
+      const searchableText = [
+        formatMemberName(member),
+        member.title ?? "",
+        member.profile?.display_name ?? "",
+      ]
+        .join(" ")
+        .toLocaleLowerCase("he")
+
+      return searchableText.includes(normalizedQuery)
+    })
+  }, [availableMembers, deferredMemberSearchQuery])
+
+  const memberPickerTotalPages = Math.max(
+    1,
+    Math.ceil(filteredAvailableMembers.length / MEMBER_PICKER_PAGE_SIZE)
+  )
+
+  useEffect(() => {
+    setMemberPickerPage((current) => Math.min(current, memberPickerTotalPages))
+  }, [memberPickerTotalPages])
+
+  const visibleAvailableMembers = useMemo(() => {
+    const from = (memberPickerPage - 1) * MEMBER_PICKER_PAGE_SIZE
+    return filteredAvailableMembers.slice(from, from + MEMBER_PICKER_PAGE_SIZE)
+  }, [filteredAvailableMembers, memberPickerPage])
+
+  useEffect(() => {
+    setSelectedUserId((current) =>
+      current && availableMembers.some((member) => member.user_id === current) ? current : ""
+    )
+  }, [availableMembers])
 
   const selectedCandidate =
     availableMembers.find((member) => member.user_id === selectedUserId) ?? null
@@ -329,6 +370,8 @@ export default function PointMemberCreatePage() {
       setSelectedUserId("")
       setTitle("")
       setRole("member")
+      setMemberSearchQuery("")
+      setMemberPickerPage(1)
     } catch (error) {
       console.error("Error adding point member:", error)
       setSaveError("לא הצלחנו להוסיף את המשתמש לצוות הנקודה כרגע.")
@@ -394,6 +437,7 @@ export default function PointMemberCreatePage() {
                             value={selectedOrganization.name?.trim() || `ארגון #${selectedOrganization.id}`}
                           />
                           <InfoPanelDetail label="נקודה" value={point.name?.trim() || `נקודה #${point.id}`} />
+                          <InfoPanelDetail label="חברים זמינים" value={availableMembers.length} />
                         </InfoPanelDetailList>
                       </InfoPanelSection>
                     </InfoPanelBody>
@@ -408,68 +452,127 @@ export default function PointMemberCreatePage() {
                         הוספת חבר לנקודה
                       </CardTitle>
                       <CardDescription>
-                        בחרו משתמש קיים מהארגון, הגדירו תפקיד וטייטל בנקודה ושייכו אותו לצוות.
+                        חפשו חבר קיים מהארגון, בחרו אותו מהרשימה, והגדירו עבורו תפקיד וטייטל בנקודה.
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-5">
                       {!canManageTeam ? (
                         <Alert variant="destructive">
                           <AlertTitle>אין הרשאה</AlertTitle>
-                          <AlertDescription>רק בעלי ומנהלי הארגון, או מנהלי נקודה, יכולים להוסיף חברים לצוות הנקודה.</AlertDescription>
+                          <AlertDescription>
+                            רק בעלי ומנהלי הארגון, או מנהלי נקודה, יכולים להוסיף חברים לצוות הנקודה.
+                          </AlertDescription>
                         </Alert>
                       ) : null}
 
                       {availableMembers.length === 0 ? (
                         <Alert>
                           <AlertTitle>אין כרגע משתמשים זמינים להוספה</AlertTitle>
-                          <AlertDescription>כל חברי הארגון כבר משויכים לנקודה הזו, או שאין עדיין חברים פעילים בארגון.</AlertDescription>
+                          <AlertDescription>
+                            כל חברי הארגון כבר משויכים לנקודה הזו, או שאין עדיין חברים פעילים בארגון.
+                          </AlertDescription>
                         </Alert>
                       ) : (
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <div className="space-y-2 md:col-span-2">
-                            <label className="text-sm font-medium">בחירת משתמש מהארגון</label>
-                            <Select
-                              value={selectedUserId}
-                              onValueChange={setSelectedUserId}
-                              disabled={!canManageTeam || saving}
-                            >
-                              <SelectTrigger className="rounded-xl">
-                                <SelectValue placeholder="בחרו משתמש קיים מהארגון" />
-                              </SelectTrigger>
-                              <SelectContent align="end">
-                                {availableMembers.map((member) => (
-                                  <SelectItem key={member.user_id} value={member.user_id}>
-                                    {formatMemberName(member)}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
+                        <div className="space-y-4">
                           <div className="space-y-2">
-                            <label className="text-sm font-medium">תפקיד בנקודה</label>
-                            <Select value={role} onValueChange={setRole} disabled={!canManageTeam || saving}>
-                              <SelectTrigger className="rounded-xl">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent align="end">
-                                {ROLE_OPTIONS.map((option) => (
-                                  <SelectItem key={option.value} value={option.value}>
-                                    {option.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">טייטל בנקודה</label>
+                            <label className="text-sm font-medium">חיפוש חבר מהארגון</label>
                             <Input
-                              value={title}
-                              onChange={(event) => setTitle(event.target.value)}
+                              value={memberSearchQuery}
+                              onChange={(event) => setMemberSearchQuery(event.target.value)}
                               disabled={!canManageTeam || saving}
-                              placeholder="למשל: טכנאי קבלה"
+                              placeholder="חיפוש לפי שם או טייטל"
+                              className="rounded-xl"
                             />
+                          </div>
+
+                          {filteredAvailableMembers.length === 0 ? (
+                            <Alert>
+                              <AlertTitle>לא נמצאו תוצאות</AlertTitle>
+                              <AlertDescription>
+                                נסו לחפש בשם אחר או להסיר חלק מהמילים כדי לראות חברים נוספים מהארגון.
+                              </AlertDescription>
+                            </Alert>
+                          ) : (
+                            <div className="space-y-4">
+                              <div className="grid gap-3 md:grid-cols-2">
+                                {visibleAvailableMembers.map((member) => (
+                                  <button
+                                    key={member.user_id}
+                                    type="button"
+                                    className="w-full text-right"
+                                    onClick={() => setSelectedUserId(member.user_id)}
+                                    disabled={!canManageTeam || saving}
+                                  >
+                                    <MemberCard
+                                      name={formatMemberName(member)}
+                                      meta={member.title?.trim() || "חבר ארגון"}
+                                      avatarUrl={member.profile?.avatar_url ?? undefined}
+                                      initialsSource={member.profile?.display_name || member.title}
+                                      badgeLabel={member.role || "member"}
+                                      className={
+                                        selectedUserId === member.user_id
+                                          ? "border-primary/50 bg-primary/5 ring-1 ring-primary/20"
+                                          : "border-border/70 bg-card transition-colors hover:border-primary/30"
+                                      }
+                                    />
+                                  </button>
+                                ))}
+                              </div>
+
+                              <div className="flex flex-col gap-3 border-t border-border/60 pt-4 md:flex-row md:items-center md:justify-between">
+                                <p className="text-sm text-muted-foreground">
+                                  עמוד {memberPickerPage} מתוך {memberPickerTotalPages}
+                                </p>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="rounded-xl"
+                                    disabled={memberPickerPage <= 1}
+                                    onClick={() => setMemberPickerPage((page) => Math.max(1, page - 1))}
+                                  >
+                                    הקודם
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="rounded-xl"
+                                    disabled={memberPickerPage >= memberPickerTotalPages}
+                                    onClick={() => setMemberPickerPage((page) => Math.min(memberPickerTotalPages, page + 1))}
+                                  >
+                                    הבא
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">תפקיד בנקודה</label>
+                              <Select value={role} onValueChange={setRole} disabled={!canManageTeam || saving}>
+                                <SelectTrigger className="rounded-xl">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent align="end">
+                                  {ROLE_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">טייטל בנקודה</label>
+                              <Input
+                                value={title}
+                                onChange={(event) => setTitle(event.target.value)}
+                                disabled={!canManageTeam || saving}
+                                placeholder="למשל: טכנאי קבלה"
+                              />
+                            </div>
                           </div>
                         </div>
                       )}

@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { getAvatarInitials } from "@/lib/avatar"
+import { buildTrackJourneyVisits, calculateVisitSlaSnapshot } from "@/lib/track-journey"
 import { supabase } from "@/lib/supabase"
 import {
   getTrackCurrentNode,
@@ -26,7 +27,6 @@ import {
   type TrackNode,
 } from "@/lib/track-schema"
 import {
-  calculateNodeSlaSnapshot,
   calculateTrackSlaSummary,
   formatMinutesLabel,
   formatRemainingLabel,
@@ -390,8 +390,30 @@ export default function PublicTrackPage() {
     () => buildVisibleNodes(track?.trackSchema ?? null, track?.currentStepKey ?? null, events),
     [events, track]
   )
-
-  const reversedVisibleNodes = useMemo(() => [...visibleNodes].reverse(), [visibleNodes])
+  const journeyVisits = useMemo(
+    () =>
+      buildTrackJourneyVisits({
+        nodeIds: visibleNodes.map((node) => node.id),
+        startNodeId: track?.trackSchema?.start_node_id ?? null,
+        currentNodeId: track?.currentStepKey ?? null,
+        createdAt: track?.createdAt ?? null,
+        events,
+      }),
+    [events, track?.createdAt, track?.currentStepKey, track?.trackSchema?.start_node_id, visibleNodes]
+  )
+  const reversedVisibleVisits = useMemo(() => {
+    const nodeMap = new Map(visibleNodes.map((node) => [node.id, node] as const))
+    return [...journeyVisits]
+      .map((visit) => {
+        const node = nodeMap.get(visit.nodeId)
+        if (!node) return null
+        return { visit, node }
+      })
+      .filter(
+        (item): item is { visit: (typeof journeyVisits)[number]; node: TrackNode } => Boolean(item)
+      )
+      .reverse()
+  }, [journeyVisits, visibleNodes])
   const currentNodeLabel = track?.currentNode?.title || track?.currentStepKey || "מתעדכן"
 
   const slaSummary = useMemo(
@@ -519,28 +541,28 @@ export default function PublicTrackPage() {
               </CardHeader>
 
               <CardContent className="px-5 pb-6 pt-5 sm:px-7">
-                {reversedVisibleNodes.length === 0 ? (
+                {reversedVisibleVisits.length === 0 ? (
                   <div className="rounded-3xl border border-dashed border-border/70 bg-muted/20 px-5 py-10 text-center text-sm text-muted-foreground">
                     עדיין אין שלבים להצגה במסלול הזה.
                   </div>
                 ) : (
                   <div className="space-y-0">
-                    {reversedVisibleNodes.map((node, index) => {
-                      const isCurrent = node.id === (track.currentNode?.id ?? track.currentStepKey)
+                    {reversedVisibleVisits.map(({ visit, node }, index) => {
+                      const isCurrent = node.id === (track.currentNode?.id ?? track.currentStepKey) && index === 0
                       const isCompleted = !isCurrent
-                      const nodeEvents = events.filter((event) => event.step_key === node.id)
-                      const nodeSlaSnapshot = calculateNodeSlaSnapshot({
-                        schema: track.trackSchema,
-                        events,
-                        createdAt: track.createdAt,
-                        nodeId: node.id,
+                      const nodeEvents = visit.events
+                      const nodeSlaSnapshot = calculateVisitSlaSnapshot({
+                        slaMinutes: node.sla ?? null,
+                        enteredAt: visit.enteredAt,
+                        exitedAt: visit.exitedAt,
                         now,
+                        isCurrent,
                       })
 
                       return (
-                        <div key={node.id} className="relative flex gap-4 pb-6 last:pb-0 sm:gap-5">
+                        <div key={visit.visitId} className="relative flex gap-4 pb-6 last:pb-0 sm:gap-5">
                           <div className="relative flex w-10 shrink-0 justify-center">
-                            {index < reversedVisibleNodes.length - 1 ? (
+                            {index < reversedVisibleVisits.length - 1 ? (
                               <div
                                 className={[
                                   "absolute left-1/2 top-9 h-[calc(100%-1.1rem)] -translate-x-1/2 border-l",

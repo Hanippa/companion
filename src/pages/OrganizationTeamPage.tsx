@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react"
+import { useDeferredValue, useEffect, useMemo, useState, type ChangeEvent, type CSSProperties } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { CircleAlert, ShieldUser, UserPlus, Users2 } from "lucide-react"
+import { CircleAlert, FileJson, ShieldUser, Upload, UserPlus, Users2 } from "lucide-react"
 
 import { AppSidebar } from "@/components/app-sidebar"
 import {
@@ -68,6 +68,9 @@ const STATUS_OPTIONS = [
   { value: "inactive", label: "לא פעיל" },
 ]
 
+const MEMBERS_PAGE_SIZE = 48
+const IMPORT_REQUEST_CHUNK_SIZE = 50
+
 const getRoleLabel = (role: string | null) => {
   switch (role) {
     case "owner":
@@ -89,10 +92,15 @@ export default function OrganizationTeamPage() {
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [loadingOrganizations, setLoadingOrganizations] = useState(true)
   const [organizationsError, setOrganizationsError] = useState<string | null>(null)
+  const [leadershipMembers, setLeadershipMembers] = useState<TeamMember[]>([])
   const [members, setMembers] = useState<TeamMember[]>([])
   const [loadingMembers, setLoadingMembers] = useState(true)
   const [membersError, setMembersError] = useState<string | null>(null)
+  const [totalMembersCount, setTotalMembersCount] = useState(0)
+  const [totalRegularMembersCount, setTotalRegularMembersCount] = useState(0)
   const [canManage, setCanManage] = useState(false)
+  const [memberSearchQuery, setMemberSearchQuery] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null)
   const [memberDisplayName, setMemberDisplayName] = useState("")
   const [memberTitle, setMemberTitle] = useState("")
@@ -102,6 +110,20 @@ export default function OrganizationTeamPage() {
   const [memberSaveMessage, setMemberSaveMessage] = useState<string | null>(null)
   const [memberSaving, setMemberSaving] = useState(false)
   const [memberRemoving, setMemberRemoving] = useState(false)
+  const [memberRefreshKey, setMemberRefreshKey] = useState(0)
+  const [importFileName, setImportFileName] = useState<string | null>(null)
+  const [importUsersCount, setImportUsersCount] = useState(0)
+  const [importUsers, setImportUsers] = useState<unknown[]>([])
+  const [importingUsers, setImportingUsers] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importProgressLabel, setImportProgressLabel] = useState<string | null>(null)
+  const [importSummary, setImportSummary] = useState<{
+    requested: number
+    created: number
+    failed: number
+  } | null>(null)
+  const [importFailures, setImportFailures] = useState<Array<{ email: string; error: string }>>([])
+  const deferredMemberSearchQuery = useDeferredValue(memberSearchQuery.trim())
 
   useEffect(() => {
     let isMounted = true
@@ -159,11 +181,18 @@ export default function OrganizationTeamPage() {
   ])
 
   useEffect(() => {
+    setCurrentPage(1)
+  }, [deferredMemberSearchQuery, selectedOrganization?.id])
+
+  useEffect(() => {
     let isMounted = true
 
     const loadMembers = async () => {
       if (!selectedOrganization) {
+        setLeadershipMembers([])
         setMembers([])
+        setTotalMembersCount(0)
+        setTotalRegularMembersCount(0)
         setLoadingMembers(false)
         return
       }
@@ -172,32 +201,117 @@ export default function OrganizationTeamPage() {
       setMembersError(null)
 
       try {
-        const [membersResult, ownerResult] = await Promise.all([
-          supabase
-            .from("organization_users")
-            .select("organization_id, user_id, role, status, title")
-            .eq("organization_id", selectedOrganization.id)
-            .eq("status", "active")
-            .order("user_id", { ascending: true }),
-          supabase
-            .from("organization_users")
-            .select("role")
-            .eq("organization_id", selectedOrganization.id)
-            .eq("user_id", user?.id ?? "")
-            .eq("status", "active")
-            .eq("role", "owner"),
+        const ownerPromise = supabase
+          .from("organization_users")
+          .select("role")
+          .eq("organization_id", selectedOrganization.id)
+          .eq("user_id", user?.id ?? "")
+          .eq("status", "active")
+          .eq("role", "owner")
+
+        const from = (currentPage - 1) * MEMBERS_PAGE_SIZE
+        const to = from + MEMBERS_PAGE_SIZE - 1
+
+        let memberRows: OrganizationMemberRow[] = []
+        let leadershipRows: OrganizationMemberRow[] = []
+        let viewerIsOwner = false
+        let nextTotalCount = 0
+        let nextRegularCount = 0
+
+        if (!deferredMemberSearchQuery) {
+          const [leadershipResult, membersResult, ownerResult] = await Promise.all([
+            supabase
+              .from("organization_users")
+              .select("organization_id, user_id, role, status, title")
+              .eq("organization_id", selectedOrganization.id)
+              .eq("status", "active")
+              .in("role", ["owner", "admin"])
+              .order("role", { ascending: false })
+              .order("user_id", { ascending: true }),
+            supabase
+              .from("organization_users")
+              .select("organization_id, user_id, role, status, title", { count: "exact" })
+              .eq("organization_id", selectedOrganization.id)
+              .eq("status", "active")
+              .eq("role", "member")
+              .order("user_id", { ascending: true })
+              .range(from, to),
+            ownerPromise,
+          ])
+
+          if (leadershipResult.error) throw leadershipResult.error
+          if (membersResult.error) throw membersResult.error
+          if (ownerResult.error) throw ownerResult.error
+
+          leadershipRows = leadershipResult.data ?? []
+          memberRows = membersResult.data ?? []
+          viewerIsOwner = (ownerResult.data ?? []).length > 0
+          nextRegularCount = membersResult.count ?? memberRows.length
+          nextTotalCount = leadershipRows.length + nextRegularCount
+        } else {
+          const [profilesResult, titleMatchesResult, ownerResult] = await Promise.all([
+            supabase
+              .from("profiles")
+              .select("id")
+              .ilike("display_name", `%${deferredMemberSearchQuery}%`),
+            supabase
+              .from("organization_users")
+              .select("organization_id, user_id, role, status, title")
+              .eq("organization_id", selectedOrganization.id)
+              .eq("status", "active")
+              .ilike("title", `%${deferredMemberSearchQuery}%`)
+              .order("user_id", { ascending: true }),
+            ownerPromise,
+          ])
+
+          if (profilesResult.error) throw profilesResult.error
+          if (titleMatchesResult.error) throw titleMatchesResult.error
+          if (ownerResult.error) throw ownerResult.error
+
+          const matchedProfileIds = (profilesResult.data ?? []).map((profile) => profile.id)
+          const profileMatchesResult =
+            matchedProfileIds.length > 0
+              ? await supabase
+                  .from("organization_users")
+                  .select("organization_id, user_id, role, status, title")
+                  .eq("organization_id", selectedOrganization.id)
+                  .eq("status", "active")
+                  .in("user_id", matchedProfileIds)
+                  .order("user_id", { ascending: true })
+              : { data: [] as OrganizationMemberRow[], error: null }
+
+          if (profileMatchesResult.error) throw profileMatchesResult.error
+
+          const mergedRowsById = new Map<string, OrganizationMemberRow>()
+          ;[...(titleMatchesResult.data ?? []), ...(profileMatchesResult.data ?? [])].forEach((member) => {
+            mergedRowsById.set(member.user_id, member)
+          })
+
+          const filteredRows = Array.from(mergedRowsById.values())
+          leadershipRows = filteredRows.filter((member) => ["owner", "admin"].includes(member.role ?? "member"))
+          const regularRows = filteredRows.filter((member) => !["owner", "admin"].includes(member.role ?? "member"))
+          memberRows = regularRows.slice(from, to + 1)
+          viewerIsOwner = (ownerResult.data ?? []).length > 0
+          nextTotalCount = filteredRows.length
+          nextRegularCount = regularRows.length
+        }
+
+        const profilesById = await getProfilesByIdsCached([
+          ...leadershipRows.map((member) => member.user_id),
+          ...memberRows.map((member) => member.user_id),
         ])
-
-        if (membersResult.error) throw membersResult.error
-        if (ownerResult.error) throw ownerResult.error
-
-        const memberRows = membersResult.data ?? []
-        const viewerIsOwner = (ownerResult.data ?? []).length > 0
-        const profilesById = await getProfilesByIdsCached(memberRows.map((member) => member.user_id))
 
         if (!isMounted) return
 
         setCanManage(viewerIsOwner)
+        setTotalMembersCount(nextTotalCount)
+        setTotalRegularMembersCount(nextRegularCount)
+        setLeadershipMembers(
+          leadershipRows.map((member) => ({
+            ...member,
+            profile: profilesById[member.user_id] ?? null,
+          }))
+        )
         setMembers(
           memberRows.map((member) => ({
             ...member,
@@ -207,7 +321,10 @@ export default function OrganizationTeamPage() {
       } catch (error) {
         if (!isMounted) return
         console.error("Error loading organization team:", error)
+        setLeadershipMembers([])
         setMembers([])
+        setTotalMembersCount(0)
+        setTotalRegularMembersCount(0)
         setCanManage(false)
         setMembersError("לא הצלחנו לטעון את צוות הארגון כרגע.")
       } finally {
@@ -224,14 +341,21 @@ export default function OrganizationTeamPage() {
     return () => {
       isMounted = false
     }
-  }, [selectedOrganization, user?.id])
+  }, [currentPage, deferredMemberSearchQuery, memberRefreshKey, selectedOrganization, user?.id])
 
   useEffect(() => {
     setSelectedMemberId((current) => {
       if (!current) return null
       return members.some((member) => member.user_id === current) ? current : null
     })
-  }, [members])
+  }, [leadershipMembers, members])
+
+  const totalPages = Math.max(1, Math.ceil(totalRegularMembersCount / MEMBERS_PAGE_SIZE))
+  const shouldShowInitialMembersSkeleton = loadingOrganizations || (loadingMembers && members.length === 0 && totalMembersCount === 0 && !membersError)
+
+  useEffect(() => {
+    setCurrentPage((current) => Math.min(current, totalPages))
+  }, [totalPages])
 
   const selectedMember = members.find((member) => member.user_id === selectedMemberId) ?? null
 
@@ -264,14 +388,33 @@ export default function OrganizationTeamPage() {
   )
 
   const groupedMembers = useMemo(() => {
-    const leadership = members.filter((member) => ["owner", "admin"].includes(member.role ?? "member"))
-    const regular = members.filter((member) => !["owner", "admin"].includes(member.role ?? "member"))
+    const leadership = leadershipMembers
+    const regular = members
+
 
     return [
       { key: "leadership", title: "בעלים ומנהלים", members: leadership },
       { key: "regular", title: "חברי צוות", members: regular },
     ].filter((group) => group.members.length > 0)
   }, [members])
+
+  const visibleGroupedMembers = useMemo(
+    () =>
+      [
+        { key: "leadership", title: "בעלים ומנהלים", members: leadershipMembers },
+        { key: "regular", title: "חברי צוות", members },
+      ].filter((group) => group.members.length > 0),
+    [leadershipMembers, members]
+  )
+
+  const groupCounts = useMemo(
+    () => ({
+      leadership: leadershipMembers.length,
+      regular: totalRegularMembersCount,
+    }),
+    [leadershipMembers.length, totalRegularMembersCount]
+  )
+  void visibleGroupedMembers
 
   const handleOrganizationChange = (value: string) => {
     const nextOrganization = organizations.find((organization) => organization.id.toString() === value)
@@ -363,6 +506,173 @@ export default function OrganizationTeamPage() {
     navigate(`/${getOrganizationSegment(selectedOrganization)}/team/new`)
   }
 
+  const handleImportFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null
+
+    setImportError(null)
+    setImportProgressLabel(null)
+    setImportSummary(null)
+    setImportFailures([])
+
+    if (!file) {
+      setImportFileName(null)
+      setImportUsers([])
+      setImportUsersCount(0)
+      return
+    }
+
+    try {
+      const text = await file.text()
+      const parsed = JSON.parse(text) as unknown
+
+      if (!Array.isArray(parsed)) {
+        throw new Error("קובץ הייבוא חייב להכיל מערך JSON של משתמשים.")
+      }
+
+      setImportFileName(file.name)
+      setImportUsers(parsed)
+      setImportUsersCount(parsed.length)
+    } catch (error) {
+      console.error("Error parsing import file:", error)
+      setImportFileName(file.name)
+      setImportUsers([])
+      setImportUsersCount(0)
+      setImportError(error instanceof Error ? error.message : "לא הצלחנו לקרוא את קובץ ה-JSON.")
+    } finally {
+      event.target.value = ""
+    }
+  }
+
+  const handleImportUsers = async () => {
+    if (!selectedOrganization || !canManage || importUsers.length === 0) return
+    const organizationId = selectedOrganization.id
+
+    setImportingUsers(true)
+    setImportError(null)
+    setImportSummary(null)
+    setImportFailures([])
+
+    try {
+      const importChunks = Array.from(
+        { length: Math.ceil(importUsers.length / IMPORT_REQUEST_CHUNK_SIZE) },
+        (_, index) =>
+          importUsers.slice(
+            index * IMPORT_REQUEST_CHUNK_SIZE,
+            (index + 1) * IMPORT_REQUEST_CHUNK_SIZE
+          )
+      )
+
+      let createdCount = 0
+      let failedCount = 0
+      const collectedFailures: Array<{ email: string; error: string }> = []
+
+      for (const [index, usersChunk] of importChunks.entries()) {
+        setImportProgressLabel(
+          `מייבא אצווה ${index + 1} מתוך ${importChunks.length} (${Math.min(
+            (index + 1) * IMPORT_REQUEST_CHUNK_SIZE,
+            importUsers.length
+          )}/${importUsers.length})`
+        )
+
+        const { data, error } = await supabase.functions.invoke<{
+          summary?: {
+            requested: number
+            created: number
+            failed: number
+          }
+          results?: Array<{
+            email?: string
+            success?: boolean
+            error?: string
+          }>
+        }>("bulk-create-managed-users", {
+          body: {
+            organization_id: organizationId,
+            batch_size: 5,
+            concurrency: 1,
+            users: usersChunk,
+          },
+        })
+
+        if (error) {
+          throw new Error(`הייבוא נעצר באצווה ${index + 1} מתוך ${importChunks.length}: ${error.message}`)
+        }
+
+        createdCount += data?.summary?.created ?? 0
+        failedCount += data?.summary?.failed ?? 0
+
+        for (const result of data?.results ?? []) {
+          if (result.success) continue
+          if (collectedFailures.length >= 5) break
+
+          collectedFailures.push({
+            email: result.email?.trim() || "ללא אימייל",
+            error: result.error?.trim() || "שגיאה לא ידועה",
+          })
+        }
+      }
+
+      setImportSummary({
+        requested: importUsers.length,
+        created: createdCount,
+        failed: failedCount,
+      })
+      setImportFailures(collectedFailures)
+      setMemberRefreshKey((current) => current + 1)
+      return
+
+      const { data, error } = await supabase.functions.invoke<{
+        summary?: {
+          requested: number
+          created: number
+          failed: number
+        }
+        results?: Array<{
+          email?: string
+          success?: boolean
+          error?: string
+        }>
+      }>("bulk-create-managed-users", {
+        body: {
+          organization_id: organizationId,
+          batch_size: 25,
+          concurrency: 5,
+          users: importUsers,
+        },
+      })
+
+      if (error) throw error
+
+      const summary = data?.summary ?? {
+        requested: importUsers.length,
+        created: 0,
+        failed: 0,
+      }
+
+      const failures = (data?.results ?? [])
+        .filter((result) => !result.success)
+        .slice(0, 5)
+        .map((result) => ({
+          email: result.email?.trim() || "ללא אימייל",
+          error: result.error?.trim() || "שגיאה לא ידועה",
+        }))
+
+      setImportSummary(summary)
+      setImportFailures(failures)
+      setMemberRefreshKey((current) => current + 1)
+    } catch (error) {
+      console.error("Error importing organization members:", error)
+      if (error instanceof Error) {
+        setImportError(error.message)
+        return
+      }
+      setImportError("לא הצלחנו לייבא את קובץ המשתמשים כרגע.")
+    } finally {
+      setImportProgressLabel(null)
+      setImportingUsers(false)
+    }
+  }
+
   return (
     <SidebarProvider style={{ "--sidebar-width": "calc(var(--spacing) * 72)", "--header-height": "calc(var(--spacing) * 12)" } as CSSProperties}>
       <AppSidebar side="right" variant="inset" />
@@ -375,7 +685,7 @@ export default function OrganizationTeamPage() {
         />
         <PageBody>
           <div className="page-stack flex-1">
-            {loadingOrganizations || loadingMembers ? (
+            {shouldShowInitialMembersSkeleton ? (
               <PageMainLayout>
                 <PageMainContent>
                   <Skeleton className="h-[32rem] rounded-3xl" />
@@ -421,6 +731,86 @@ export default function OrganizationTeamPage() {
                         <Button onClick={handleOpenCreatePage} disabled={!canManage} className="w-full rounded-xl">
                           <UserPlus className="size-4" />
                           יצירת חבר חדש
+                        </Button>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-border/70 shadow-none">
+                      <CardContent className="flex flex-col gap-4 p-5">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium">ייבוא חברים מ-JSON</p>
+                          <p className="text-sm text-muted-foreground">
+                            העלו קובץ JSON של עובדים כדי ליצור חשבונות בכמות גדולה דרך מנגנון הייבוא החדש.
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label htmlFor="organization-members-import" className="text-sm font-medium">
+                            קובץ JSON
+                          </label>
+                          <Input
+                            id="organization-members-import"
+                            type="file"
+                            accept=".json,application/json"
+                            onChange={handleImportFileChange}
+                            disabled={!canManage || importingUsers}
+                            className="cursor-pointer rounded-xl"
+                          />
+                        </div>
+
+                        {importFileName ? (
+                          <div className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-3 py-3">
+                            <FileJson className="mt-0.5 size-4 text-muted-foreground" />
+                            <div className="space-y-1 text-sm">
+                              <div className="font-medium">{importFileName}</div>
+                              <div className="text-muted-foreground">
+                                {importUsersCount} רשומות מוכנות לייבוא
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {importProgressLabel ? (
+                          <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+                            {importProgressLabel}
+                          </div>
+                        ) : null}
+
+                        {importError ? (
+                          <Alert variant="destructive">
+                            <AlertTitle>הייבוא נכשל</AlertTitle>
+                            <AlertDescription>{importError}</AlertDescription>
+                          </Alert>
+                        ) : null}
+
+                        {importSummary ? (
+                          <Alert>
+                            <AlertTitle>סיכום ייבוא</AlertTitle>
+                            <AlertDescription className="space-y-2">
+                              <div>
+                                התבקשו {importSummary.requested} משתמשים, נוצרו {importSummary.created}, ונכשלו {importSummary.failed}.
+                              </div>
+                              {importFailures.length > 0 ? (
+                                <div className="space-y-1 text-sm">
+                                  {importFailures.map((failure) => (
+                                    <div key={`${failure.email}-${failure.error}`} className="text-muted-foreground">
+                                      {failure.email}: {failure.error}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </AlertDescription>
+                          </Alert>
+                        ) : null}
+
+                        <Button
+                          onClick={handleImportUsers}
+                          disabled={!canManage || importingUsers || importUsers.length === 0}
+                          className="w-full rounded-xl"
+                          variant="outline"
+                        >
+                          <Upload className="size-4" />
+                          {importingUsers ? "מייבא משתמשים..." : "ייבוא משתמשים מהקובץ"}
                         </Button>
                       </CardContent>
                     </Card>
@@ -539,8 +929,20 @@ export default function OrganizationTeamPage() {
                             </CardDescription>
                           </div>
                           <Badge variant="outline" className="rounded-full">
-                            סה"כ {members.length} חברים
+                            סה"כ {totalMembersCount} חברים
                           </Badge>
+                        </div>
+                        <div className="space-y-2">
+                          <label htmlFor="organization-members-search" className="text-sm font-medium">
+                            חיפוש חברים
+                          </label>
+                          <Input
+                            id="organization-members-search"
+                            value={memberSearchQuery}
+                            onChange={(event) => setMemberSearchQuery(event.target.value)}
+                            placeholder="חיפוש לפי שם או טייטל"
+                            className="rounded-xl"
+                          />
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
@@ -549,19 +951,28 @@ export default function OrganizationTeamPage() {
                             <AlertTitle>אי אפשר לטעון את הצוות</AlertTitle>
                             <AlertDescription>{membersError}</AlertDescription>
                           </Alert>
-                        ) : members.length === 0 ? (
+                        ) : totalMembersCount === 0 ? (
                           <Alert>
-                            <AlertTitle>עדיין אין חברי צוות</AlertTitle>
-                            <AlertDescription>אפשר ליצור את המשתמש הראשון של הארגון מהעמוד הייעודי ליצירת חבר חדש.</AlertDescription>
+                            <AlertTitle>{deferredMemberSearchQuery ? "לא נמצאו תוצאות" : "עדיין אין חברי צוות"}</AlertTitle>
+                            <AlertDescription>
+                              {deferredMemberSearchQuery
+                                ? "נסו לחפש בשם אחר או בטייטל אחר."
+                                : "אפשר ליצור את המשתמש הראשון של הארגון מהעמוד הייעודי ליצירת חבר חדש."}
+                            </AlertDescription>
                           </Alert>
                         ) : (
                           <div className="space-y-5">
+                            {loadingMembers ? (
+                              <div className="rounded-xl border border-border/60 bg-muted/15 px-4 py-3 text-sm text-muted-foreground">
+                                טוען את חברי הארגון...
+                              </div>
+                            ) : null}
                             {groupedMembers.map((group) => (
                               <div key={group.key} className="space-y-3">
                                 <div className="flex items-center justify-between gap-3">
                                   <div className="text-sm font-medium">{group.title}</div>
                                   <Badge variant="outline" className="rounded-full">
-                                    {group.members.length}
+                                    {group.key === "leadership" ? groupCounts.leadership : groupCounts.regular}
                                   </Badge>
                                 </div>
                                 <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
@@ -593,6 +1004,31 @@ export default function OrganizationTeamPage() {
                                 </div>
                               </div>
                             ))}
+                            <div className="flex flex-col gap-3 border-t border-border/60 pt-4 md:flex-row md:items-center md:justify-between">
+                              <p className="text-sm text-muted-foreground">
+                                עמוד {currentPage} מתוך {totalPages}
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="rounded-xl"
+                                  disabled={currentPage <= 1}
+                                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                                >
+                                  הקודם
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="rounded-xl"
+                                  disabled={currentPage >= totalPages}
+                                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                                >
+                                  הבא
+                                </Button>
+                              </div>
+                            </div>
                           </div>
                         )}
                       </CardContent>

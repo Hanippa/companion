@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { Check, CircleDot, LoaderCircle, Route } from "lucide-react"
 
 import { TrackNodeSlaIndicator } from "@/components/track-node-sla-indicator"
@@ -6,8 +6,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { getAvatarInitials } from "@/lib/avatar"
+import { buildTrackJourneyVisits, calculateVisitSlaSnapshot } from "@/lib/track-journey"
 import type { TrackNode, TrackNodeConnection } from "@/lib/track-schema"
-import { calculateNodeSlaSnapshot, formatMinutesLabel } from "@/lib/track-sla"
+import { formatMinutesLabel } from "@/lib/track-sla"
 import { cn } from "@/lib/utils"
 
 export type TrackNodeAction = TrackNodeConnection
@@ -76,62 +77,6 @@ const getEventSubtitle = (event: TrackStepperEvent) => {
   return new Date(event.created_at).toLocaleString("he-IL")
 }
 
-const buildTraversedNodeIds = ({
-  nodes,
-  startNodeId,
-  currentNodeId,
-  events,
-}: {
-  nodes: TrackNode[]
-  startNodeId: string | null
-  currentNodeId: string | null
-  events: TrackStepperEvent[]
-}) => {
-  const nodeIds = new Set(nodes.map((node) => node.id))
-  const orderedPath: string[] = []
-
-  const pushNode = (nodeId: string | null) => {
-    if (!nodeId || !nodeIds.has(nodeId)) return
-    if (orderedPath[orderedPath.length - 1] === nodeId) return
-    orderedPath.push(nodeId)
-  }
-
-  pushNode(startNodeId)
-
-  for (const event of events) {
-    if (event.event_type === "step_advance") {
-      pushNode(getPayloadString(event.payload, "from_node_id") ?? event.step_key)
-      pushNode(getPayloadString(event.payload, "to_node_id"))
-      continue
-    }
-
-    if (orderedPath.length === 0) {
-      pushNode(event.step_key)
-    }
-  }
-
-  pushNode(currentNodeId)
-
-  if (orderedPath.length === 0 && nodes[0]) {
-    orderedPath.push(nodes[0].id)
-  }
-
-  return orderedPath
-}
-
-const groupEventsByNode = (events: TrackStepperEvent[]) => {
-  const grouped = new Map<string, TrackStepperEvent[]>()
-
-  for (const event of events) {
-    if (!event.step_key) continue
-    const current = grouped.get(event.step_key) ?? []
-    current.push(event)
-    grouped.set(event.step_key, current)
-  }
-
-  return grouped
-}
-
 function StepEventCard({ event }: { event: TrackStepperEvent }) {
   const actorLabel = event.actor_name?.trim() || "חבר צוות"
   const eventSubtitle = getEventSubtitle(event)
@@ -141,9 +86,7 @@ function StepEventCard({ event }: { event: TrackStepperEvent }) {
       <div className="flex items-start gap-3">
         <Avatar className="size-9 border border-border/60">
           <AvatarImage src={event.actor_avatar_url ?? undefined} alt={actorLabel} />
-          <AvatarFallback className="text-xs">
-            {getAvatarInitials(actorLabel)}
-          </AvatarFallback>
+          <AvatarFallback className="text-xs">{getAvatarInitials(actorLabel)}</AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-center justify-between gap-3">
@@ -271,7 +214,7 @@ function NodeCard({
       {events.length > 0 ? (
         <div className="mt-4 space-y-3 border-t border-border/60 pt-4">
           <div className="text-xs font-medium tracking-wide text-muted-foreground">
-            אירועים בצומת זה
+            אירועים בביקור הזה
           </div>
           <div className="space-y-3">
             {events.map((event) => (
@@ -306,31 +249,23 @@ export function TrackStepper({
     (left, right) => new Date(left.created_at).getTime() - new Date(right.created_at).getTime()
   )
   const nodeMap = new Map(nodes.map((node) => [node.id, node] as const))
-  const traversedNodeIds = buildTraversedNodeIds({
-    nodes,
+  const visits = buildTrackJourneyVisits({
+    nodeIds: nodes.map((node) => node.id),
     startNodeId,
     currentNodeId,
+    createdAt,
     events: orderedEvents,
   })
-  const visibleNodes = traversedNodeIds
-    .map((nodeId) => nodeMap.get(nodeId))
-    .filter((node): node is TrackNode => Boolean(node))
-  const eventsByNode = groupEventsByNode(orderedEvents)
-  const resolvedCurrentNodeId =
-    currentNodeId && nodeMap.has(currentNodeId)
-      ? currentNodeId
-      : visibleNodes[visibleNodes.length - 1]?.id ?? startNodeId
 
-  const trackSchema = useMemo(
-    () => ({
-      title: null,
-      description: null,
-      start_node_id: startNodeId,
-      end_node_id: null,
-      nodes,
-    }),
-    [nodes, startNodeId]
-  )
+  const visibleVisits = visits
+    .map((visit) => {
+      const node = nodeMap.get(visit.nodeId)
+      if (!node) return null
+      return { visit, node }
+    })
+    .filter(
+      (item): item is { visit: (typeof visits)[number]; node: TrackNode } => Boolean(item)
+    )
 
   if (nodes.length === 0) {
     return (
@@ -347,22 +282,20 @@ export function TrackStepper({
 
   return (
     <div className={cn("space-y-0", className)}>
-      {visibleNodes.map((node, index) => {
-        const isLast = index === visibleNodes.length - 1
-        const isCurrent = node.id === resolvedCurrentNodeId
-        const isCompleted =
-          !isCurrent &&
-          traversedNodeIds.indexOf(node.id) < traversedNodeIds.indexOf(resolvedCurrentNodeId ?? "")
-        const nodeSlaSnapshot = calculateNodeSlaSnapshot({
-          schema: trackSchema,
-          events: orderedEvents,
-          createdAt,
-          nodeId: node.id,
+      {visibleVisits.map(({ visit, node }, index) => {
+        const isLast = index === visibleVisits.length - 1
+        const isCurrent = isLast
+        const isCompleted = !isCurrent
+        const nodeSlaSnapshot = calculateVisitSlaSnapshot({
+          slaMinutes: node.sla ?? null,
+          enteredAt: visit.enteredAt,
+          exitedAt: visit.exitedAt,
           now,
+          isCurrent,
         })
 
         return (
-          <div key={node.id} className="relative flex gap-4 pb-5 last:pb-0">
+          <div key={visit.visitId} className="relative flex gap-4 pb-5 last:pb-0">
             <div className="relative flex w-10 shrink-0 justify-center">
               {!isLast ? (
                 <div
@@ -390,14 +323,14 @@ export function TrackStepper({
 
             <NodeCard
               node={node}
-              events={eventsByNode.get(node.id) ?? []}
+              events={visit.events}
               isCurrent={isCurrent}
               isCompleted={isCompleted}
-          pendingTransitionId={pendingTransitionId}
-          nodeElapsedMs={nodeSlaSnapshot.elapsedMs}
-          nodeSlaProgress={nodeSlaSnapshot.progressPercent}
-          nodeRemainingMs={nodeSlaSnapshot.remainingMs}
-          isNodeOverdue={nodeSlaSnapshot.isOverdue}
+              pendingTransitionId={pendingTransitionId}
+              nodeElapsedMs={nodeSlaSnapshot.elapsedMs}
+              nodeSlaProgress={nodeSlaSnapshot.progressPercent}
+              nodeRemainingMs={nodeSlaSnapshot.remainingMs}
+              isNodeOverdue={nodeSlaSnapshot.isOverdue}
               slaMode={slaMode}
               onTransitionSelect={onTransitionSelect}
             />
