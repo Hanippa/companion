@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react"
+import { useEffect, useMemo, useState, type CSSProperties, type ChangeEvent } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { CircleAlert, MapPinned, PencilLine, Plus, SaveIcon } from "lucide-react"
+import { CircleAlert, FileJson, MapPinned, PencilLine, Plus, SaveIcon, Trash2, Upload } from "lucide-react"
 
 import { AppSidebar } from "@/components/app-sidebar"
 import {
@@ -40,8 +40,15 @@ type Point = {
   status: string | null
 }
 
+type PointImportRow = {
+  title?: string | null
+  description?: string | null
+}
+
 const getStatusLabel = (status: string | null | undefined) =>
   status === "active" ? "פעילה" : status?.trim() || "לא פעילה"
+
+const POINT_IMPORT_BATCH_SIZE = 100
 
 export default function PointEditPage() {
   const { user } = useAuth()
@@ -58,12 +65,25 @@ export default function PointEditPage() {
   const [loadingPoint, setLoadingPoint] = useState(true)
   const [pointError, setPointError] = useState<string | null>(null)
   const [canEdit, setCanEdit] = useState(false)
+  const [canDelete, setCanDelete] = useState(false)
   const [loadingPermissions, setLoadingPermissions] = useState(true)
   const [pointName, setPointName] = useState("")
   const [pointNotes, setPointNotes] = useState("")
   const [savingPoint, setSavingPoint] = useState(false)
+  const [deletingPoint, setDeletingPoint] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [importFileName, setImportFileName] = useState<string | null>(null)
+  const [importPoints, setImportPoints] = useState<PointImportRow[]>([])
+  const [importPointsCount, setImportPointsCount] = useState(0)
+  const [importingPoints, setImportingPoints] = useState(false)
+  const [importProgressLabel, setImportProgressLabel] = useState<string | null>(null)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importSummary, setImportSummary] = useState<{
+    requested: number
+    created: number
+    failed: number
+  } | null>(null)
 
   useEffect(() => {
     let isMounted = true
@@ -109,6 +129,7 @@ export default function PointEditPage() {
     const fetchPointAndPermissions = async () => {
       if (!selectedOrganization) {
         setLoadingPoint(false)
+        setCanDelete(false)
         setLoadingPermissions(false)
         return
       }
@@ -119,17 +140,26 @@ export default function PointEditPage() {
       setSaveMessage(null)
       setSaveError(null)
 
-      const permissionQuery = supabase
+      const editPermissionQuery = supabase
         .from("organization_users")
         .select("role")
         .eq("organization_id", selectedOrganization.id)
         .eq("user_id", user?.id ?? "")
         .eq("status", "active")
 
-      const [permissionResult, pointResult] = await Promise.all([
+      const deletePermissionQuery = supabase
+        .from("organization_users")
+        .select("role")
+        .eq("organization_id", selectedOrganization.id)
+        .eq("user_id", user?.id ?? "")
+        .eq("status", "active")
+        .eq("role", "owner")
+
+      const [permissionResult, deletePermissionResult, pointResult] = await Promise.all([
         isCreateMode
-          ? permissionQuery.eq("role", "owner")
-          : permissionQuery.in("role", ["admin", "owner"]),
+          ? editPermissionQuery.eq("role", "owner")
+          : editPermissionQuery.in("role", ["admin", "owner"]),
+        deletePermissionQuery,
         isCreateMode
           ? Promise.resolve({ data: null, error: null })
           : supabase
@@ -148,6 +178,13 @@ export default function PointEditPage() {
         setCanEdit(false)
       } else {
         setCanEdit((permissionResult.data ?? []).length > 0)
+      }
+
+      if (deletePermissionResult.error) {
+        console.error("Error fetching delete permission:", deletePermissionResult.error)
+        setCanDelete(false)
+      } else {
+        setCanDelete((deletePermissionResult.data ?? []).length > 0)
       }
       setLoadingPermissions(false)
 
@@ -227,8 +264,8 @@ export default function PointEditPage() {
 
   const pageTitle = isCreateMode ? "יצירת נקודה" : "עריכת נקודה"
   const pageDescription = isCreateMode
-    ? "בעל הארגון יכול להקים נקודה חדשה בארגון, ולהגדיר לה שם ותיאור."
-    : "עריכת פרטי הנקודה נשארת בעמוד ייעודי כדי לשמור על עמוד הנקודה עצמו נקי וקריא."
+    ? "יצירת נקודה חדשה בארגון."
+    : "עריכת פרטי הנקודה."
 
   const permissionDescription = useMemo(() => {
     if (isCreateMode) {
@@ -237,6 +274,125 @@ export default function PointEditPage() {
 
     return "עריכת נקודה זמינה לבעלי הארגון ולמנהלי הארגון."
   }, [isCreateMode])
+
+  const handleImportFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+
+    setImportError(null)
+    setImportProgressLabel(null)
+    setImportSummary(null)
+
+    if (!file) {
+      setImportFileName(null)
+      setImportPoints([])
+      setImportPointsCount(0)
+      return
+    }
+
+    try {
+      const raw = await file.text()
+      const parsed = JSON.parse(raw) as unknown
+
+      if (!Array.isArray(parsed)) {
+        throw new Error("קובץ ה-JSON חייב להכיל רשימה של נקודות.")
+      }
+
+      const sanitized = parsed.map((item) => {
+        if (!item || typeof item !== "object") {
+          return {}
+        }
+
+        const point = item as PointImportRow
+        return {
+          title: typeof point.title === "string" ? point.title.trim() : "",
+          description: typeof point.description === "string" ? point.description.trim() : "",
+        }
+      })
+
+      setImportFileName(file.name)
+      setImportPoints(sanitized)
+      setImportPointsCount(sanitized.length)
+    } catch (error) {
+      console.error("Error parsing points import file:", error)
+      setImportFileName(file.name)
+      setImportPoints([])
+      setImportPointsCount(0)
+      setImportError(error instanceof Error ? error.message : "לא הצלחנו לקרוא את קובץ ה-JSON.")
+    } finally {
+      event.target.value = ""
+    }
+  }
+
+  const handleImportPoints = async () => {
+    if (!selectedOrganization || !canEdit || importPoints.length === 0 || importingPoints) {
+      return
+    }
+
+    setImportingPoints(true)
+    setImportError(null)
+    setImportProgressLabel(null)
+    setImportSummary(null)
+    setSaveMessage(null)
+    setSaveError(null)
+
+    try {
+      const pointChunks = Array.from(
+        { length: Math.ceil(importPoints.length / POINT_IMPORT_BATCH_SIZE) },
+        (_, index) =>
+          importPoints.slice(
+            index * POINT_IMPORT_BATCH_SIZE,
+            (index + 1) * POINT_IMPORT_BATCH_SIZE
+          )
+      )
+
+      let createdCount = 0
+      let failedCount = 0
+
+      for (const [index, chunk] of pointChunks.entries()) {
+        setImportProgressLabel(
+          `מייבא אצווה ${index + 1} מתוך ${pointChunks.length} (${Math.min(
+            (index + 1) * POINT_IMPORT_BATCH_SIZE,
+            importPoints.length
+          )}/${importPoints.length})`
+        )
+
+        const validRows = chunk.filter((item) => item.title?.trim())
+        failedCount += chunk.length - validRows.length
+
+        if (validRows.length === 0) {
+          continue
+        }
+
+        const { error } = await supabase.from("points").insert(
+          validRows.map((item) => ({
+            organization_id: selectedOrganization.id,
+            name: item.title?.trim() || null,
+            notes: item.description?.trim() || null,
+            status: "active",
+          }))
+        )
+
+        if (error) {
+          throw error
+        }
+
+        createdCount += validRows.length
+      }
+
+      setImportSummary({
+        requested: importPoints.length,
+        created: createdCount,
+        failed: failedCount,
+      })
+      setSaveMessage("ייבוא הנקודות הושלם.")
+    } catch (error) {
+      console.error("Error importing points:", error)
+      setImportError("לא הצלחנו לייבא את קובץ הנקודות כרגע.")
+    } finally {
+      setImportProgressLabel(null)
+      setImportingPoints(false)
+    }
+  }
 
   const handlePointSave = async () => {
     if (!selectedOrganization || !canEdit) {
@@ -316,6 +472,44 @@ export default function PointEditPage() {
     }
   }
 
+  const handleDeletePoint = async () => {
+    if (isCreateMode || !selectedOrganization || !point || !canDelete || deletingPoint) {
+      return
+    }
+
+    const confirmed = window.confirm(
+      `למחוק את הנקודה "${point.name?.trim() || `נקודה #${point.id}`}"?`
+    )
+    if (!confirmed) {
+      return
+    }
+
+    setDeletingPoint(true)
+    setSaveError(null)
+    setSaveMessage(null)
+
+    try {
+      const { error } = await supabase.functions.invoke("delete-point", {
+        body: {
+          point_id: point.id,
+        },
+      })
+
+      if (error) {
+        throw error
+      }
+
+      navigate(`/${getOrganizationSegment(selectedOrganization)}`, { replace: true })
+    } catch (error) {
+      console.error("Error deleting point:", error)
+      setSaveError(
+        "לא הצלחנו למחוק את הנקודה כרגע. בדקו שפונקציית delete-point פרוסה ושיש לכם הרשאה לבצע את הפעולה."
+      )
+    } finally {
+      setDeletingPoint(false)
+    }
+  }
+
   const handleBack = () => {
     if (!selectedOrganization) {
       navigate("/dashboard")
@@ -369,31 +563,110 @@ export default function PointEditPage() {
             ) : (
               <PageMainLayout>
                 <PageMainRail>
-                  <InfoPanel>
-                    <InfoPanelHeader
-                      icon={MapPinned}
-                      title={pointName.trim() || (isCreateMode ? "נקודה חדשה" : `נקודה #${point?.id ?? "—"}`)}
-                      description={pointNotes.trim() || pageDescription}
-                      badge={
-                        <Badge variant={canEdit ? "default" : "outline"}>
-                          {isCreateMode ? "יצירה" : getStatusLabel(point?.status)}
-                        </Badge>
-                      }
-                    />
-                    <InfoPanelBody>
-                      <InfoPanelSection title="הקשר">
-                        <InfoPanelDetailList>
-                          <InfoPanelDetail
-                            label="ארגון"
-                            value={selectedOrganization?.name?.trim() || `ארגון #${selectedOrganization?.id ?? "—"}`}
-                          />
-                          {!isCreateMode && point ? (
-                            <InfoPanelDetail label="מזהה נקודה" value={point.id} />
+                  <div className="space-y-4">
+                    <InfoPanel className="xl:static">
+                      <InfoPanelHeader
+                        icon={MapPinned}
+                        title={
+                          pointName.trim() ||
+                          (isCreateMode ? "נקודה חדשה" : `נקודה #${point?.id ?? "—"}`)
+                        }
+                        description={pointNotes.trim() || pageDescription}
+                        badge={
+                          <Badge variant={canEdit ? "default" : "outline"}>
+                            {isCreateMode ? "יצירה" : getStatusLabel(point?.status)}
+                          </Badge>
+                        }
+                      />
+                      <InfoPanelBody>
+                        <InfoPanelSection title="הקשר">
+                          <InfoPanelDetailList>
+                            <InfoPanelDetail
+                              label="ארגון"
+                              value={
+                                selectedOrganization?.name?.trim() ||
+                                `ארגון #${selectedOrganization?.id ?? "—"}`
+                              }
+                            />
+                            {!isCreateMode && point ? (
+                              <InfoPanelDetail label="מזהה נקודה" value={point.id} />
+                            ) : null}
+                          </InfoPanelDetailList>
+                        </InfoPanelSection>
+                      </InfoPanelBody>
+                    </InfoPanel>
+
+                    {isCreateMode ? (
+                      <Card className="border-border/70 shadow-none">
+                        <CardContent className="flex flex-col gap-4 p-5">
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium">ייבוא נקודות מ-JSON</p>
+                            <p className="text-sm text-muted-foreground">
+                              העלו קובץ JSON כדי ליצור כמה נקודות בבת אחת.
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <label htmlFor="points-import" className="text-sm font-medium">
+                              קובץ JSON
+                            </label>
+                            <Input
+                              id="points-import"
+                              type="file"
+                              accept=".json,application/json"
+                              onChange={handleImportFileChange}
+                              disabled={!canEdit || importingPoints}
+                              className="cursor-pointer rounded-xl"
+                            />
+                          </div>
+
+                          {importFileName ? (
+                            <div className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-3 py-3">
+                              <FileJson className="mt-0.5 size-4 text-muted-foreground" />
+                              <div className="space-y-1 text-sm">
+                                <div className="font-medium">{importFileName}</div>
+                                <div className="text-muted-foreground">
+                                  {importPointsCount} רשומות מוכנות לייבוא
+                                </div>
+                              </div>
+                            </div>
                           ) : null}
-                        </InfoPanelDetailList>
-                      </InfoPanelSection>
-                    </InfoPanelBody>
-                  </InfoPanel>
+
+                          {importProgressLabel ? (
+                            <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+                              {importProgressLabel}
+                            </div>
+                          ) : null}
+
+                          {importError ? (
+                            <Alert variant="destructive">
+                              <AlertTitle>הייבוא נכשל</AlertTitle>
+                              <AlertDescription>{importError}</AlertDescription>
+                            </Alert>
+                          ) : null}
+
+                          {importSummary ? (
+                            <Alert>
+                              <AlertTitle>סיכום ייבוא</AlertTitle>
+                              <AlertDescription>
+                                מתוך {importSummary.requested} רשומות, נוצרו {importSummary.created} נקודות ו-{importSummary.failed} נדחו.
+                              </AlertDescription>
+                            </Alert>
+                          ) : null}
+
+                          <Button
+                            onClick={handleImportPoints}
+                            disabled={!canEdit || importingPoints || importPoints.length === 0}
+                            className="w-full rounded-xl"
+                            variant="outline"
+                          >
+                            <Upload className="size-4" />
+                            {importingPoints ? "מייבא נקודות..." : "ייבוא נקודות מהקובץ"}
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ) : null}
+                  </div>
                 </PageMainRail>
                 <PageMainContent>
                   <Card className="border-border/70 shadow-none">
@@ -456,12 +729,23 @@ export default function PointEditPage() {
                         </div>
                       </div>
                       <div className="flex flex-wrap justify-end gap-3 border-t border-border/60 pt-4">
+                        {!isCreateMode && canDelete ? (
+                          <Button
+                            variant="destructive"
+                            onClick={handleDeletePoint}
+                            disabled={savingPoint || deletingPoint || !canDelete}
+                            className="rounded-xl"
+                          >
+                            <Trash2 className="size-4" />
+                            {deletingPoint ? "מוחק נקודה..." : "מחיקת נקודה"}
+                          </Button>
+                        ) : null}
                         <Button variant="outline" onClick={handleBack} className="rounded-xl">
                           חזרה
                         </Button>
                         <Button
                           onClick={handlePointSave}
-                          disabled={savingPoint || !canEdit}
+                          disabled={savingPoint || deletingPoint || !canEdit}
                           className="rounded-xl"
                         >
                           <SaveIcon className="size-4" />

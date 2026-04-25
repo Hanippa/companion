@@ -1,7 +1,7 @@
 "use client"
 
 import { Link, useLocation } from "react-router-dom"
-import { PinIcon, RouteIcon, StarOffIcon } from "lucide-react"
+import { MoreHorizontal, PinIcon, RouteIcon, StarOffIcon, Trash2 } from "lucide-react"
 
 import {
   SidebarGroup,
@@ -9,11 +9,16 @@ import {
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuAction,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSkeleton,
 } from "@/components/ui/sidebar"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { type TrackQuickAccessItem } from "@/lib/track-quick-access"
 
 function TrackMenuList({
@@ -21,11 +26,13 @@ function TrackMenuList({
   items,
   onPinToggle,
   onRemoveRecent,
+  onRemoveTrackEverywhere,
 }: {
   title: string
   items: TrackQuickAccessItem[]
   onPinToggle: (trackId: number, pinned: boolean) => void
   onRemoveRecent?: (trackId: number) => void
+  onRemoveTrackEverywhere?: (trackId: number) => void
 }) {
   const location = useLocation()
 
@@ -38,9 +45,6 @@ function TrackMenuList({
       </div>
       <SidebarMenu>
         {items.map((item) => {
-          const meta = [item.pointName?.trim(), item.refId ? `#${item.refId}` : null]
-            .filter(Boolean)
-            .join(" · ")
           const isPinned = Boolean(item.pinnedAt)
 
           return (
@@ -48,36 +52,54 @@ function TrackMenuList({
               <SidebarMenuButton
                 asChild
                 isActive={location.pathname === item.url}
-                className="h-auto min-h-11 items-start py-2"
+                className="h-auto min-h-14 items-start py-2.5"
               >
                 <Link to={item.url}>
-                  <RouteIcon className="mt-0.5 size-4" />
+                  <RouteIcon className="mt-0.5 size-4 shrink-0" />
                   <span className="flex min-w-0 flex-1 flex-col items-start">
-                    <span className="truncate text-sm font-medium">
-                      {item.name?.trim() || `מסלול #${item.id}`}
-                    </span>
+                    <span className="truncate text-sm font-medium">{item.pointName?.trim() || "ללא נקודה"}</span>
+                    <span className="text-xs text-sidebar-foreground/65">מסלול #{item.refId ?? item.id}</span>
                     <span className="truncate text-xs text-sidebar-foreground/60">
-                      {meta || item.currentStepKey || "גישה מהירה"}
+                      {item.trackTypeName?.trim() || item.name?.trim() || "ללא סוג מסלול"}
                     </span>
                   </span>
                 </Link>
               </SidebarMenuButton>
               <SidebarMenuAction
-                showOnHover
-                onClick={() => onPinToggle(item.id, isPinned)}
-                aria-label={isPinned ? "הסרת מסלול מהמוצמדים" : "הצמדת מסלול"}
-                title={isPinned ? "הסרת מסלול מהמוצמדים" : "הצמדת מסלול"}
+                showOnHover={false}
+                className="translate-y-0"
               >
-                {isPinned ? <StarOffIcon className="size-4" /> : <PinIcon className="size-4" />}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex size-7 items-center justify-center rounded-md text-sidebar-foreground/55 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      aria-label="פעולות מסלול"
+                      title="פעולות מסלול"
+                    >
+                      <MoreHorizontal className="size-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="min-w-40">
+                    <DropdownMenuItem onClick={() => onPinToggle(item.id, isPinned)}>
+                      {isPinned ? <StarOffIcon className="size-4" /> : <PinIcon className="size-4" />}
+                      {isPinned ? "הסרת הצמדה" : "הצמדה"}
+                    </DropdownMenuItem>
+                    {onRemoveRecent ? (
+                      <DropdownMenuItem onClick={() => onRemoveRecent(item.id)}>
+                        <Trash2 className="size-4" />
+                        הסר מהאחרונים
+                      </DropdownMenuItem>
+                    ) : null}
+                    {onRemoveTrackEverywhere ? (
+                      <DropdownMenuItem onClick={() => onRemoveTrackEverywhere(item.id)}>
+                        <Trash2 className="size-4" />
+                        נקה מהרשימה
+                      </DropdownMenuItem>
+                    ) : null}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </SidebarMenuAction>
-              {onRemoveRecent ? (
-                <SidebarMenuBadge
-                  className="end-8 cursor-pointer text-[10px] text-sidebar-foreground/45 hover:text-sidebar-accent-foreground"
-                  onClick={() => onRemoveRecent(item.id)}
-                >
-                  הסר
-                </SidebarMenuBadge>
-              ) : null}
             </SidebarMenuItem>
           )
         })}
@@ -92,12 +114,14 @@ export function NavTracks({
   loading = false,
   onPinToggle,
   onRemoveRecent,
+  onRemoveTrackEverywhere,
 }: {
   pinnedItems: TrackQuickAccessItem[]
   recentItems: TrackQuickAccessItem[]
   loading?: boolean
   onPinToggle: (trackId: number, pinned: boolean) => void
   onRemoveRecent: (trackId: number) => void
+  onRemoveTrackEverywhere: (trackId: number) => void
 }) {
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden" dir="rtl">
@@ -129,12 +153,14 @@ export function NavTracks({
               title="מוצמדים"
               items={pinnedItems}
               onPinToggle={onPinToggle}
+              onRemoveTrackEverywhere={onRemoveTrackEverywhere}
             />
             <TrackMenuList
               title="אחרונים"
               items={recentItems}
               onPinToggle={onPinToggle}
               onRemoveRecent={onRemoveRecent}
+              onRemoveTrackEverywhere={onRemoveTrackEverywhere}
             />
           </div>
         )}

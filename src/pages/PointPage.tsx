@@ -1,7 +1,6 @@
 ﻿import { useEffect, useMemo, useState, type CSSProperties } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import {
-  ArrowRight,
   ArrowDown,
   CircleAlert,
   MapPinned,
@@ -23,7 +22,7 @@ import { SiteHeader } from "@/components/site-header"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { useAuth } from "@/contexts/AuthContext"
@@ -41,7 +40,6 @@ import {
   type TrackNode,
   type TrackNodeConnection,
 } from "@/lib/track-schema"
-import { formatMinutesLabel } from "@/lib/track-sla"
 import { supabase } from "@/lib/supabase"
 
 type Organization = { id: number; name: string | null; notes: string | null; status: string | null }
@@ -435,9 +433,9 @@ export default function PointPage() {
                         }
                       />
                       <InfoPanelBody>
-                        <InfoPanelSection
-                          title="פעולות נקודה"
-                          description="כל מה שקשור לניהול הנקודה מרוכז כאן, בלי להעמיס על התוכן הראשי."
+                      <InfoPanelSection
+                        title="פעולות נקודה"
+                        description="פעולות הניהול של הנקודה."
                         >
                           <div className="grid gap-2">
                             <Button
@@ -470,9 +468,9 @@ export default function PointPage() {
                           </div>
                         </InfoPanelSection>
 
-                        <InfoPanelSection
-                          title="חברי נקודה"
-                          description="תצוגה מקוצרת של הצוות הפעיל בנקודה הזו."
+                      <InfoPanelSection
+                        title="חברי נקודה"
+                        description="תצוגה מקוצרת של הצוות הפעיל."
                         >
                           <PointMembersList
                             members={members}
@@ -492,7 +490,7 @@ export default function PointPage() {
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <CardTitle className="flex items-center gap-2"><Route className="size-5" />מסלולים</CardTitle>
-                            <CardDescription>רשומות המעקב הפעילות של הנקודה, במבנה תצוגה נקי וקצר.</CardDescription>
+                            <CardDescription>כל המסלולים הפעילים של הנקודה.</CardDescription>
                           </div>
                           <Badge variant="outline" className="rounded-full">{tracks.length} מסלולים</Badge>
                         </div>
@@ -505,53 +503,60 @@ export default function PointPage() {
                         ) : tracks.length === 0 ? (
                           <Alert><AlertTitle>אין עדיין מסלולים</AlertTitle><AlertDescription>לנקודה הזו עדיין אין רשומות מסלול גלויות עבור החשבון שלך.</AlertDescription></Alert>
                         ) : (
-                          <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                             {tracks.map((track) => (
-                              <Card key={track.id} size="sm" className="point-entry-card overflow-hidden border-border/70 bg-card/95 shadow-none">
-                                <CardHeader className="gap-2 pb-2.5">
-                                  <div className="flex items-center justify-between gap-3">
+                              <Card key={track.id} size="sm" className="entity-entry-card overflow-hidden border-border/70 bg-card/95 shadow-none">
+                                <CardHeader className="gap-3 pb-3">
+                                  <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0 space-y-1">
                                       <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
                                         <Route className="size-3.5" />
                                         מסלול
                                       </div>
-                                      <CardTitle className="truncate text-base">{getTrackRecordTitle(track)}</CardTitle>
+                                      <CardTitle className="line-clamp-2 text-base leading-6">
+                                        {getTrackRecordTitle(track)}
+                                      </CardTitle>
+                                      <CardDescription className="line-clamp-1 leading-5">
+                                        {track.currentNode?.description || track.notes || "מעקב פעיל בנקודה הזו."}
+                                      </CardDescription>
                                     </div>
-                                    <Badge variant="outline" className="shrink-0 rounded-full uppercase">{track.status || "active"}</Badge>
+                                    <Badge variant="outline" className="shrink-0 rounded-full uppercase">
+                                      {track.status || "active"}
+                                    </Badge>
                                   </div>
-                                  <CardDescription className="space-y-1 leading-6">
-                                    <div>סוג מסלול: {track.trackType?.name?.trim() || `סוג #${track.trackType?.id ?? "—"}`}</div>
-                                    <div>מספר ייחוס: {track.refId}</div>
-                                    <div>שלב נוכחי: {track.currentNode?.title || track.currentStepKey || "לא הוגדר"}</div>
-                                    <div>SLA: {formatMinutesLabel(track.sla ?? track.trackType?.sla ?? null)} · {track.slaMode === "manual" ? "ידני" : "נגזר"}</div>
-                                  </CardDescription>
                                 </CardHeader>
-                                <CardContent className="space-y-3">
-                                  {track.currentNode?.description ? (
-                                    <div className="rounded-[1.1rem] border border-border/60 bg-linear-to-l from-muted/5 via-background to-background px-3 py-2.5 text-sm leading-6 text-muted-foreground">
-                                      {track.currentNode.description}
-                                    </div>
-                                  ) : null}
-                                  <div className="rounded-[1.1rem] border border-border/60 bg-linear-to-l from-muted/5 via-background to-background px-3 py-2.5">
-                                    <div className="mb-2 text-sm font-medium">צעדי המשך זמינים</div>
-                                    {track.nextConnections.length === 0 ? (
-                                      <div className="text-sm text-muted-foreground">אין מעבר זמין לשלב הבא כרגע.</div>
-                                    ) : (
-                                      <div className="flex flex-wrap gap-2">
-                                        {track.nextConnections.map((transition) => (
-                                          <Badge key={transition.id} variant="secondary" className="gap-1 rounded-full px-3 py-1">
-                                            <ArrowRight className="size-3" />
-                                            {transition.label}
-                                          </Badge>
-                                        ))}
+                                <CardContent className="pb-3">
+                                  <div className="grid gap-2 sm:grid-cols-2">
+                                    <div className="entity-entry-card__meta">
+                                      <div className="entity-entry-card__meta-label">סוג מסלול</div>
+                                      <div className="entity-entry-card__meta-value">
+                                        {track.trackType?.name?.trim() || `סוג #${track.trackType?.id ?? "—"}`}
                                       </div>
-                                    )}
+                                    </div>
+                                    <div className="entity-entry-card__meta">
+                                      <div className="entity-entry-card__meta-label">מספר ייחוס</div>
+                                      <div className="entity-entry-card__meta-value">#{track.refId}</div>
+                                    </div>
+                                    <div className="entity-entry-card__meta">
+                                      <div className="entity-entry-card__meta-label">שלב נוכחי</div>
+                                      <div className="entity-entry-card__meta-value">
+                                        {track.currentNode?.title || track.currentStepKey || "לא הוגדר"}
+                                      </div>
+                                    </div>
+                                    <div className="entity-entry-card__meta">
+                                      <div className="entity-entry-card__meta-label">המשך זמין</div>
+                                      <div className="entity-entry-card__meta-value">
+                                        {track.nextConnections.length > 0 ? `${track.nextConnections.length} מעברים` : "ללא מעבר"}
+                                      </div>
+                                    </div>
                                   </div>
-                                  {track.notes ? <div className="line-clamp-2 text-sm text-muted-foreground">{track.notes}</div> : null}
-                                  <Button variant="outline" className="w-full rounded-xl" onClick={() => navigate(track.url)}>
-                                    פתיחת מסלול
-                                  </Button>
                                 </CardContent>
+                                <CardFooter className="border-t border-border/60 pt-3">
+                                  <Button variant="outline" className="w-full rounded-xl justify-between" onClick={() => navigate(track.url)}>
+                                    פתיחת מסלול
+                                    <Route className="size-4" />
+                                  </Button>
+                                </CardFooter>
                               </Card>
                             ))}
                           </div>

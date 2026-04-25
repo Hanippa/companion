@@ -22,7 +22,7 @@ export function TrackRecordData({ data, compact = false }: TrackRecordDataProps)
     return (
       <Alert>
         <AlertTitle>אין מידע שמור</AlertTitle>
-        <AlertDescription>לרשומת המסלול הזו עדיין אין נתונים שמורים.</AlertDescription>
+        <AlertDescription>עדיין לא נשמר מידע עבור המסלול הזה.</AlertDescription>
       </Alert>
     )
   }

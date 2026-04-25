@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useParams } from "react-router-dom"
 import {
   ChevronDown,
@@ -142,48 +142,26 @@ const getPublicEventTitle = (event: PublicTrackEvent) => {
     return getPayloadString(event.payload, "transition_label") || "הטיפול התקדם"
   }
 
+  const customTitle = getPayloadString(event.payload, "title")
+  if (customTitle) {
+    return customTitle
+  }
+
   return getPayloadString(event.payload, "note") || "עדכון כללי"
+}
+
+const getPublicEventSubtitle = (event: PublicTrackEvent) => {
+  const note = getPayloadString(event.payload, "note")
+  if (!note) return null
+  if (event.event_type !== "step_advance" && !getPayloadString(event.payload, "title")) {
+    return null
+  }
+  return note
 }
 
 const getNodeTitle = (schema: NormalizedTrackSchema | null, nodeId: string | null | undefined) => {
   if (!schema || !nodeId) return null
   return schema.nodes.find((node) => node.id === nodeId)?.title ?? null
-}
-
-const buildVisibleNodes = (
-  schema: NormalizedTrackSchema | null,
-  currentStepKey: string | null,
-  events: PublicTrackEvent[]
-) => {
-  const nodes = schema?.nodes ?? []
-  const nodeMap = new Map(nodes.map((node) => [node.id, node] as const))
-  const orderedPath: string[] = []
-
-  const pushNode = (nodeId: string | null) => {
-    if (!nodeId || !nodeMap.has(nodeId)) return
-    if (orderedPath[orderedPath.length - 1] === nodeId) return
-    orderedPath.push(nodeId)
-  }
-
-  pushNode(schema?.start_node_id ?? null)
-
-  for (const event of events) {
-    if (event.event_type === "step_advance") {
-      pushNode(getPayloadString(event.payload, "to_node_id") ?? event.step_key)
-    } else {
-      pushNode(event.step_key)
-    }
-  }
-
-  pushNode(currentStepKey)
-
-  if (orderedPath.length === 0 && nodes[0]) {
-    orderedPath.push(nodes[0].id)
-  }
-
-  return orderedPath
-    .map((nodeId) => nodeMap.get(nodeId))
-    .filter((node): node is TrackNode => Boolean(node))
 }
 
 function CompactInfoPill({
@@ -386,10 +364,7 @@ export default function PublicTrackPage() {
     }
   }, [loadTrack, trackingToken])
 
-  const visibleNodes = useMemo(
-    () => buildVisibleNodes(track?.trackSchema ?? null, track?.currentStepKey ?? null, events),
-    [events, track]
-  )
+  const visibleNodes = useMemo(() => track?.trackSchema?.nodes ?? [], [track?.trackSchema?.nodes])
   const journeyVisits = useMemo(
     () =>
       buildTrackJourneyVisits({
@@ -438,7 +413,7 @@ export default function PublicTrackPage() {
   const mainSlaCaption =
     slaSummary.effectiveTrackSlaMinutes !== null
       ? `SLA למסלול: ${formatMinutesLabel(slaSummary.effectiveTrackSlaMinutes)}`
-      : "למסלול הזה לא הוגדר SLA."
+      : "למסלול הזה לא הוגדר זמן יעד."
 
   return (
     <main
@@ -655,6 +630,11 @@ export default function PublicTrackPage() {
                                             <div className="text-sm leading-6 text-muted-foreground">
                                               {getPublicEventTitle(event)}
                                             </div>
+                                            {getPublicEventSubtitle(event) ? (
+                                              <div className="text-sm leading-6 text-muted-foreground/90">
+                                                {getPublicEventSubtitle(event)}
+                                              </div>
+                                            ) : null}
                                           </div>
                                           <div className="text-xs text-muted-foreground">
                                             {formatPublicEventTimestamp(event.created_at)}
@@ -691,3 +671,4 @@ export default function PublicTrackPage() {
     </main>
   )
 }
+

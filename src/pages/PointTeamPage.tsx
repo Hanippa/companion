@@ -463,7 +463,7 @@ export default function PointTeamPage() {
                       <InfoPanelHeader
                         icon={MapPinned}
                         title={point.name?.trim() || `נקודה #${point.id}`}
-                        description={point.notes?.trim() || "ניהול הצוות הפעיל של הנקודה מתוך חברי הארגון."}
+                        description={point.notes?.trim() || "ניהול חברי הנקודה."}
                         badge={<Badge variant={canManageTeam ? "default" : "outline"}>{permissionLabel}</Badge>}
                       />
                       <InfoPanelBody className="pt-0" />
@@ -474,7 +474,7 @@ export default function PointTeamPage() {
                         <div className="space-y-1">
                           <p className="text-sm font-medium">הוספת חבר חדש</p>
                           <p className="text-sm text-muted-foreground">
-                            שיוך חבר ארגון לנקודה נעשה בעמוד ייעודי, כדי להשאיר את עמוד הצוות ממוקד בניהול הקיים.
+                            הוספת חבר לנקודה נעשית בעמוד נפרד, כדי להשאיר את העמוד הזה ממוקד בניהול הצוות.
                           </p>
                         </div>
                         <Button onClick={handleOpenCreatePage} disabled={!canManageTeam} className="w-full rounded-xl">
@@ -503,7 +503,7 @@ export default function PointTeamPage() {
                             ניהול חבר קיים
                           </CardTitle>
                           <CardDescription>
-                            כאן אפשר לעדכן את פרטי חבר הנקודה שבחרתם מהרשימה.
+                            עדכנו כאן את פרטי החבר שנבחר.
                           </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-5">
@@ -602,7 +602,7 @@ export default function PointTeamPage() {
                               חברי הנקודה
                             </CardTitle>
                             <CardDescription>
-                              זהו מוקד הניהול הראשי של צוות הנקודה: חברים פעילים, תפקידי נקודה ופרטי השיוך שלהם.
+                              כאן מנהלים את חברי הנקודה, התפקידים והסטטוס שלהם.
                             </CardDescription>
                           </div>
                           <Badge variant="outline" className="rounded-full">

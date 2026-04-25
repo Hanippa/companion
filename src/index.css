@@ -327,13 +327,26 @@
     @apply h-px w-full bg-gradient-to-l from-transparent via-border to-transparent;
   }
 
-  .point-entry-card {
+  .entity-entry-card {
     @apply transition-[transform,border-color,box-shadow,background-color] duration-200 ease-out;
   }
 
-  .point-entry-card:hover {
+  .entity-entry-card:hover {
     animation: point-card-float 200ms ease-out forwards;
     border-color: color-mix(in oklab, var(--color-primary) 28%, var(--color-border));
+    background-color: color-mix(in oklab, var(--color-card) 94%, var(--color-primary) 6%);
+  }
+
+  .entity-entry-card__meta {
+    @apply rounded-[1rem] border border-border/60 bg-muted/15 px-3 py-2.5;
+  }
+
+  .entity-entry-card__meta-label {
+    @apply text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground;
+  }
+
+  .entity-entry-card__meta-value {
+    @apply mt-1 truncate text-sm font-medium text-foreground;
   }
 
   .public-track-hero {

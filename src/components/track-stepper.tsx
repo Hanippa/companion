@@ -1,10 +1,25 @@
 import { useEffect, useState } from "react"
-import { Check, CircleDot, LoaderCircle, Route } from "lucide-react"
+import {
+  Check,
+  CircleDot,
+  LoaderCircle,
+  MoreHorizontal,
+  Route,
+  SquarePen,
+  Trash2,
+} from "lucide-react"
 
 import { TrackNodeSlaIndicator } from "@/components/track-node-sla-indicator"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
 import { getAvatarInitials } from "@/lib/avatar"
 import { buildTrackJourneyVisits, calculateVisitSlaSnapshot } from "@/lib/track-journey"
 import type { TrackNode, TrackNodeConnection } from "@/lib/track-schema"
@@ -34,6 +49,25 @@ type TrackStepperProps = {
   slaMode?: string | null
   baseSlaMinutes?: number | null
   onTransitionSelect?: (action: TrackNodeAction, sourceNode: TrackNode) => void
+  activeEventVisitId?: string | null
+  customEventTitle?: string
+  customEventNote?: string
+  savingCustomEvent?: boolean
+  onToggleEventComposer?: (visitId: string) => void
+  onCustomEventTitleChange?: (value: string) => void
+  onCustomEventNoteChange?: (value: string) => void
+  onCreateCustomEvent?: (visitId: string) => void
+  activeEditEventId?: number | null
+  editEventTitle?: string
+  editEventNote?: string
+  savingEditedEvent?: boolean
+  deletingEventId?: number | null
+  onStartEditEvent?: (event: TrackStepperEvent) => void
+  onCancelEditEvent?: () => void
+  onEditEventTitleChange?: (value: string) => void
+  onEditEventNoteChange?: (value: string) => void
+  onSaveEditedEvent?: (eventId: number) => void
+  onDeleteEvent?: (event: TrackStepperEvent) => void
   className?: string
 }
 
@@ -45,11 +79,18 @@ const getPayloadString = (
   return typeof value === "string" && value.trim() ? value.trim() : null
 }
 
+const isCustomEvent = (event: TrackStepperEvent) =>
+  event.event_type === "general" && getPayloadString(event.payload, "kind") === "custom"
+
 const getEventTitle = (event: TrackStepperEvent) => {
   if (event.event_type === "step_advance") return "המסלול קודם"
   if (event.event_type === "general" && getPayloadString(event.payload, "kind") === "created") {
     return "הרשומה נוצרה"
   }
+
+  const customTitle = getPayloadString(event.payload, "title")
+  if (customTitle) return customTitle
+
   return "עדכון כללי"
 }
 
@@ -62,13 +103,8 @@ const getEventSubtitle = (event: TrackStepperEvent) => {
       return `${transitionLabel} · אל ${toNodeId}`
     }
 
-    if (transitionLabel) {
-      return transitionLabel
-    }
-
-    if (toNodeId) {
-      return `מעבר אל ${toNodeId}`
-    }
+    if (transitionLabel) return transitionLabel
+    if (toNodeId) return `מעבר אל ${toNodeId}`
   }
 
   const note = getPayloadString(event.payload, "note")
@@ -77,9 +113,107 @@ const getEventSubtitle = (event: TrackStepperEvent) => {
   return new Date(event.created_at).toLocaleString("he-IL")
 }
 
-function StepEventCard({ event }: { event: TrackStepperEvent }) {
+function StepEventCard({
+  event,
+  isEditing = false,
+  editTitle = "",
+  editNote = "",
+  savingEditedEvent = false,
+  deletingEvent = false,
+  onStartEdit,
+  onCancelEdit,
+  onEditTitleChange,
+  onEditNoteChange,
+  onSaveEditedEvent,
+  onDeleteEvent,
+}: {
+  event: TrackStepperEvent
+  isEditing?: boolean
+  editTitle?: string
+  editNote?: string
+  savingEditedEvent?: boolean
+  deletingEvent?: boolean
+  onStartEdit?: (event: TrackStepperEvent) => void
+  onCancelEdit?: () => void
+  onEditTitleChange?: (value: string) => void
+  onEditNoteChange?: (value: string) => void
+  onSaveEditedEvent?: (eventId: number) => void
+  onDeleteEvent?: (event: TrackStepperEvent) => void
+}) {
   const actorLabel = event.actor_name?.trim() || "חבר צוות"
   const eventSubtitle = getEventSubtitle(event)
+  const canManageEvent = isCustomEvent(event)
+
+  if (isEditing && canManageEvent) {
+    return (
+      <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-4">
+        <div className="flex items-start gap-3">
+          <Avatar className="size-9 border border-border/60">
+            <AvatarImage src={event.actor_avatar_url ?? undefined} alt={actorLabel} />
+            <AvatarFallback className="text-xs">{getAvatarInitials(actorLabel)}</AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium">{actorLabel}</div>
+                <div className="text-xs text-emerald-950/65">עריכת אירוע ידני</div>
+              </div>
+              <div className="shrink-0 text-[11px] text-emerald-950/60">
+                {new Date(event.created_at).toLocaleString("he-IL")}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor={`edit-event-title-${event.id}`}>
+                כותרת האירוע
+              </label>
+              <Input
+                id={`edit-event-title-${event.id}`}
+                value={editTitle}
+                onChange={(nextEvent) => onEditTitleChange?.(nextEvent.target.value)}
+                placeholder="למשל: עדכון ללקוח"
+                disabled={savingEditedEvent || deletingEvent}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor={`edit-event-note-${event.id}`}>
+                פירוט
+              </label>
+              <textarea
+                id={`edit-event-note-${event.id}`}
+                value={editNote}
+                onChange={(nextEvent) => onEditNoteChange?.(nextEvent.target.value)}
+                placeholder="פרטים נוספים שחשוב לשמור על האירוע הזה."
+                className="min-h-24 w-full rounded-2xl border border-input bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                disabled={savingEditedEvent || deletingEvent}
+              />
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                className="rounded-xl"
+                onClick={onCancelEdit}
+                disabled={savingEditedEvent || deletingEvent}
+              >
+                ביטול
+              </Button>
+              <Button
+                type="button"
+                className="rounded-xl"
+                onClick={() => onSaveEditedEvent?.(event.id)}
+                disabled={savingEditedEvent || deletingEvent}
+              >
+                {savingEditedEvent ? "שומר..." : "שמירת שינויים"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="rounded-xl border border-border/60 bg-background/70 px-4 py-3">
@@ -94,8 +228,38 @@ function StepEventCard({ event }: { event: TrackStepperEvent }) {
               <div className="truncate text-sm font-medium">{actorLabel}</div>
               <div className="text-xs text-muted-foreground">{getEventTitle(event)}</div>
             </div>
-            <div className="shrink-0 text-[11px] text-muted-foreground">
-              {new Date(event.created_at).toLocaleString("he-IL")}
+            <div className="flex items-center gap-1.5">
+              <div className="shrink-0 text-[11px] text-muted-foreground">
+                {new Date(event.created_at).toLocaleString("he-IL")}
+              </div>
+              {canManageEvent ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 rounded-full text-emerald-950/55 hover:text-emerald-950/85"
+                    >
+                      <MoreHorizontal className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-40">
+                    <DropdownMenuItem onClick={() => onStartEdit?.(event)}>
+                      <SquarePen className="size-4" />
+                      עריכה
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={() => onDeleteEvent?.(event)}
+                      disabled={deletingEvent}
+                    >
+                      <Trash2 className="size-4" />
+                      מחיקה
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
             </div>
           </div>
           <div className="text-sm leading-6 text-muted-foreground">{eventSubtitle}</div>
@@ -107,6 +271,7 @@ function StepEventCard({ event }: { event: TrackStepperEvent }) {
 
 function NodeCard({
   node,
+  visitId,
   events,
   isCurrent,
   isCompleted,
@@ -117,8 +282,28 @@ function NodeCard({
   isNodeOverdue = false,
   slaMode = "derived",
   onTransitionSelect,
+  isEventComposerOpen = false,
+  customEventTitle = "",
+  customEventNote = "",
+  savingCustomEvent = false,
+  onToggleEventComposer,
+  onCustomEventTitleChange,
+  onCustomEventNoteChange,
+  onCreateCustomEvent,
+  activeEditEventId = null,
+  editEventTitle = "",
+  editEventNote = "",
+  savingEditedEvent = false,
+  deletingEventId = null,
+  onStartEditEvent,
+  onCancelEditEvent,
+  onEditEventTitleChange,
+  onEditEventNoteChange,
+  onSaveEditedEvent,
+  onDeleteEvent,
 }: {
   node: TrackNode
+  visitId: string
   events: TrackStepperEvent[]
   isCurrent: boolean
   isCompleted: boolean
@@ -129,15 +314,36 @@ function NodeCard({
   isNodeOverdue?: boolean
   slaMode?: string | null
   onTransitionSelect?: (action: TrackNodeAction, sourceNode: TrackNode) => void
+  isEventComposerOpen?: boolean
+  customEventTitle?: string
+  customEventNote?: string
+  savingCustomEvent?: boolean
+  onToggleEventComposer?: (visitId: string) => void
+  onCustomEventTitleChange?: (value: string) => void
+  onCustomEventNoteChange?: (value: string) => void
+  onCreateCustomEvent?: (visitId: string) => void
+  activeEditEventId?: number | null
+  editEventTitle?: string
+  editEventNote?: string
+  savingEditedEvent?: boolean
+  deletingEventId?: number | null
+  onStartEditEvent?: (event: TrackStepperEvent) => void
+  onCancelEditEvent?: () => void
+  onEditEventTitleChange?: (value: string) => void
+  onEditEventNoteChange?: (value: string) => void
+  onSaveEditedEvent?: (eventId: number) => void
+  onDeleteEvent?: (event: TrackStepperEvent) => void
 }) {
   const canAdvance = isCurrent && node.next_nodes.length > 0 && onTransitionSelect
+  const canAnnotateVisit = isCurrent || isCompleted
+  const shouldShowEventsSection = events.length > 0 || canAnnotateVisit
 
   return (
     <div
       className={cn(
         "w-full rounded-2xl border p-5 transition-colors",
-        isCurrent && "border-primary/40 bg-primary/5",
-        isCompleted && "border-primary/20 bg-primary/5",
+        isCurrent && "border-primary/30 bg-primary/5",
+        isCompleted && "border-primary/15 bg-primary/5",
         !isCurrent && !isCompleted && "border-border/70 bg-card"
       )}
     >
@@ -150,7 +356,7 @@ function NodeCard({
             ) : null}
             <div className="flex flex-wrap gap-2 pt-1">
               {typeof node.sla_modifier === "number" && node.sla_modifier > 0 ? (
-                <Badge variant="secondary" className="rounded-full">
+                <Badge variant="secondary" className="rounded-full border-primary/15 bg-primary/10 text-emerald-950/75">
                   {slaMode === "manual"
                     ? `+${formatMinutesLabel(node.sla_modifier)} ignored`
                     : `+${formatMinutesLabel(node.sla_modifier)} ל-SLA הכולל`}
@@ -162,7 +368,7 @@ function NodeCard({
             className={cn(
               "rounded-full px-2.5 py-1 text-xs font-medium",
               isCurrent && "bg-primary text-primary-foreground",
-              isCompleted && "bg-primary/10 text-primary",
+              isCompleted && "bg-primary/10 text-emerald-950/80",
               !isCurrent && !isCompleted && "bg-muted text-muted-foreground"
             )}
           >
@@ -211,16 +417,102 @@ function NodeCard({
         ) : null}
       </div>
 
-      {events.length > 0 ? (
+      {shouldShowEventsSection ? (
         <div className="mt-4 space-y-3 border-t border-border/60 pt-4">
-          <div className="text-xs font-medium tracking-wide text-muted-foreground">
-            אירועים בביקור הזה
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-xs font-medium tracking-wide text-muted-foreground">
+              אירועים בביקור הזה
+            </div>
+            {canAnnotateVisit && !isEventComposerOpen ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-full border-primary/20 bg-primary/10 text-emerald-950/80 hover:bg-primary/15 hover:text-emerald-950"
+                onClick={() => onToggleEventComposer?.(visitId)}
+              >
+                <SquarePen className="size-4" />
+                הוספת אירוע
+              </Button>
+            ) : null}
           </div>
-          <div className="space-y-3">
-            {events.map((event) => (
-              <StepEventCard key={event.id} event={event} />
-            ))}
-          </div>
+
+          {events.length > 0 ? (
+            <div className="space-y-3">
+              {events.map((event) => (
+                <StepEventCard
+                  key={event.id}
+                  event={event}
+                  isEditing={activeEditEventId === event.id}
+                  editTitle={editEventTitle}
+                  editNote={editEventNote}
+                  savingEditedEvent={savingEditedEvent}
+                  deletingEvent={deletingEventId === event.id}
+                  onStartEdit={onStartEditEvent}
+                  onCancelEdit={onCancelEditEvent}
+                  onEditTitleChange={onEditEventTitleChange}
+                  onEditNoteChange={onEditEventNoteChange}
+                  onSaveEditedEvent={onSaveEditedEvent}
+                  onDeleteEvent={onDeleteEvent}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-border/60 bg-background/40 px-4 py-4 text-sm text-muted-foreground">
+              עדיין לא נוספו אירועים לביקור הזה.
+            </div>
+          )}
+
+          {canAnnotateVisit && isEventComposerOpen ? (
+            <div className="space-y-3 rounded-xl border border-primary/15 bg-primary/5 px-4 py-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor={`event-title-${visitId}`}>
+                  כותרת האירוע
+                </label>
+                <Input
+                  id={`event-title-${visitId}`}
+                  value={customEventTitle}
+                  onChange={(event) => onCustomEventTitleChange?.(event.target.value)}
+                  placeholder="למשל: הלקוח אישר עבודה חריגה"
+                  disabled={savingCustomEvent}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor={`event-note-${visitId}`}>
+                  פירוט
+                </label>
+                <textarea
+                  id={`event-note-${visitId}`}
+                  value={customEventNote}
+                  onChange={(event) => onCustomEventNoteChange?.(event.target.value)}
+                  placeholder="פרטים נוספים שחשוב לשמור על השלב הזה."
+                  className="min-h-28 w-full rounded-2xl border border-input bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  disabled={savingCustomEvent}
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="rounded-xl"
+                  onClick={() => onToggleEventComposer?.(visitId)}
+                  disabled={savingCustomEvent}
+                >
+                  ביטול
+                </Button>
+                <Button
+                  type="button"
+                  className="rounded-xl"
+                  onClick={() => onCreateCustomEvent?.(visitId)}
+                  disabled={savingCustomEvent}
+                >
+                  {savingCustomEvent ? "מוסיף אירוע..." : "שמירת אירוע"}
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -236,6 +528,25 @@ export function TrackStepper({
   createdAt = null,
   slaMode = "derived",
   onTransitionSelect,
+  activeEventVisitId = null,
+  customEventTitle = "",
+  customEventNote = "",
+  savingCustomEvent = false,
+  onToggleEventComposer,
+  onCustomEventTitleChange,
+  onCustomEventNoteChange,
+  onCreateCustomEvent,
+  activeEditEventId = null,
+  editEventTitle = "",
+  editEventNote = "",
+  savingEditedEvent = false,
+  deletingEventId = null,
+  onStartEditEvent,
+  onCancelEditEvent,
+  onEditEventTitleChange,
+  onEditEventNoteChange,
+  onSaveEditedEvent,
+  onDeleteEvent,
   className,
 }: TrackStepperProps) {
   const [now, setNow] = useState(() => Date.now())
@@ -301,7 +612,7 @@ export function TrackStepper({
                 <div
                   className={cn(
                     "absolute left-1/2 top-9 h-[calc(100%-1.25rem)] -translate-x-1/2 border-l",
-                    isCompleted ? "border-primary/40" : "border-border"
+                    isCompleted ? "border-primary/25" : "border-border"
                   )}
                 />
               ) : null}
@@ -309,7 +620,7 @@ export function TrackStepper({
                 className={cn(
                   "relative z-10 mt-1 flex size-8 items-center justify-center rounded-full border transition-colors",
                   isCurrent && "border-primary bg-primary text-primary-foreground",
-                  isCompleted && "border-primary/30 bg-primary/10 text-primary",
+                  isCompleted && "border-primary/20 bg-primary/10 text-emerald-950/80",
                   !isCurrent && !isCompleted && "border-border bg-background text-muted-foreground"
                 )}
               >
@@ -323,6 +634,7 @@ export function TrackStepper({
 
             <NodeCard
               node={node}
+              visitId={visit.visitId}
               events={visit.events}
               isCurrent={isCurrent}
               isCompleted={isCompleted}
@@ -333,6 +645,25 @@ export function TrackStepper({
               isNodeOverdue={nodeSlaSnapshot.isOverdue}
               slaMode={slaMode}
               onTransitionSelect={onTransitionSelect}
+              isEventComposerOpen={activeEventVisitId === visit.visitId}
+              customEventTitle={customEventTitle}
+              customEventNote={customEventNote}
+              savingCustomEvent={savingCustomEvent}
+              onToggleEventComposer={onToggleEventComposer}
+              onCustomEventTitleChange={onCustomEventTitleChange}
+              onCustomEventNoteChange={onCustomEventNoteChange}
+              onCreateCustomEvent={onCreateCustomEvent}
+              activeEditEventId={activeEditEventId}
+              editEventTitle={editEventTitle}
+              editEventNote={editEventNote}
+              savingEditedEvent={savingEditedEvent}
+              deletingEventId={deletingEventId}
+              onStartEditEvent={onStartEditEvent}
+              onCancelEditEvent={onCancelEditEvent}
+              onEditEventTitleChange={onEditEventTitleChange}
+              onEditEventNoteChange={onEditEventNoteChange}
+              onSaveEditedEvent={onSaveEditedEvent}
+              onDeleteEvent={onDeleteEvent}
             />
           </div>
         )

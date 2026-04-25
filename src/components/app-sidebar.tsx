@@ -29,6 +29,8 @@ import {
   pinTrack,
   readTrackQuickAccess,
   removeRecentTrack,
+  removeTrackQuickAccessItem,
+  TRACK_QUICK_ACCESS_EVENT,
   type TrackQuickAccessItem,
   unpinTrack,
 } from "@/lib/track-quick-access"
@@ -38,6 +40,7 @@ type CurrentTrackItem = {
   name: string | null
   url: string
   pointName?: string | null
+  trackTypeName?: string | null
   refId?: number | null
   currentStepKey?: string | null
 }
@@ -111,7 +114,23 @@ export function AppSidebar({
       return
     }
 
-    setQuickAccess(readTrackQuickAccess(user.id))
+    const syncQuickAccess = () => setQuickAccess(readTrackQuickAccess(user.id))
+
+    syncQuickAccess()
+
+    const handleQuickAccessUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId?: string }>).detail
+      if (detail?.userId && detail.userId !== user.id) return
+      syncQuickAccess()
+    }
+
+    window.addEventListener(TRACK_QUICK_ACCESS_EVENT, handleQuickAccessUpdated as EventListener)
+    window.addEventListener("storage", syncQuickAccess)
+
+    return () => {
+      window.removeEventListener(TRACK_QUICK_ACCESS_EVENT, handleQuickAccessUpdated as EventListener)
+      window.removeEventListener("storage", syncQuickAccess)
+    }
   }, [user?.id])
 
   useEffect(() => {
@@ -151,6 +170,13 @@ export function AppSidebar({
     setQuickAccess(nextState)
   }
 
+  const handleRemoveTrackEverywhere = (trackId: number) => {
+    if (!user?.id) return
+
+    const nextState = removeTrackQuickAccessItem(user.id, trackId)
+    setQuickAccess(nextState)
+  }
+
   return (
     <Sidebar variant="inset" collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -182,6 +208,7 @@ export function AppSidebar({
           recentItems={recentItems}
           onPinToggle={handlePinToggle}
           onRemoveRecent={handleRemoveRecent}
+          onRemoveTrackEverywhere={handleRemoveTrackEverywhere}
         />
         <NavSecondary items={navSecondary} className="mt-auto" />
       </SidebarContent>

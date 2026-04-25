@@ -714,7 +714,7 @@ export default function OrganizationTeamPage() {
                       <InfoPanelHeader
                         icon={ShieldUser}
                         title={selectedOrganization.name?.trim() || `ארגון #${selectedOrganization.id}`}
-                        description={selectedOrganization.notes?.trim() || "ניהול חברי הארגון והרשאותיהם."}
+                        description={selectedOrganization.notes?.trim() || "ניהול חברי הארגון."}
                         badge={<Badge variant={canManage ? "default" : "outline"}>{canManage ? "בעלים" : "קריאה בלבד"}</Badge>}
                       />
                       <InfoPanelBody className="pt-0" />
@@ -725,7 +725,7 @@ export default function OrganizationTeamPage() {
                         <div className="space-y-1">
                           <p className="text-sm font-medium">יצירת חבר חדש</p>
                           <p className="text-sm text-muted-foreground">
-                            פתיחת משתמש חדש נעשית בעמוד ייעודי, כדי להשאיר את עמוד הצוות ממוקד בניהול הקיים.
+                           יצירת חבר חדש בארגון.
                           </p>
                         </div>
                         <Button onClick={handleOpenCreatePage} disabled={!canManage} className="w-full rounded-xl">
@@ -740,7 +740,7 @@ export default function OrganizationTeamPage() {
                         <div className="space-y-1">
                           <p className="text-sm font-medium">ייבוא חברים מ-JSON</p>
                           <p className="text-sm text-muted-foreground">
-                            העלו קובץ JSON של עובדים כדי ליצור חשבונות בכמות גדולה דרך מנגנון הייבוא החדש.
+                            העלו קובץ JSON כדי ליצור משתמשים רבים בבת אחת.
                           </p>
                         </div>
 
@@ -788,7 +788,7 @@ export default function OrganizationTeamPage() {
                             <AlertTitle>סיכום ייבוא</AlertTitle>
                             <AlertDescription className="space-y-2">
                               <div>
-                                התבקשו {importSummary.requested} משתמשים, נוצרו {importSummary.created}, ונכשלו {importSummary.failed}.
+                                מתוך {importSummary.requested} רשומות, נוצרו {importSummary.created} משתמשים ו-{importSummary.failed} נכשלו.
                               </div>
                               {importFailures.length > 0 ? (
                                 <div className="space-y-1 text-sm">
@@ -834,7 +834,7 @@ export default function OrganizationTeamPage() {
                             ניהול חבר קיים
                           </CardTitle>
                           <CardDescription>
-                            כאן אפשר לעדכן את פרטי החבר שבחרתם מהרשימה.
+                            עדכנו כאן את פרטי החבר שנבחר.
                           </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-5">
@@ -925,7 +925,7 @@ export default function OrganizationTeamPage() {
                               חברי הארגון
                             </CardTitle>
                             <CardDescription>
-                              זהו מוקד הניהול הראשי של צוות הארגון: חברים פעילים, תפקידים, ופרטי השיוך הארגוני שלהם.
+                              כאן מנהלים את חברי הארגון, התפקידים והסטטוס שלהם.
                             </CardDescription>
                           </div>
                           <Badge variant="outline" className="rounded-full">

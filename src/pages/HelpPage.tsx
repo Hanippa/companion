@@ -104,7 +104,7 @@ export default function HelpPage() {
                   <InfoPanelHeader
                     icon={CircleHelpIcon}
                     title="מרכז עזרה"
-                    description="סיכום קצר של הזרימות המרכזיות לפי תפקידי המערכת, כדי שיהיה ברור מי עושה מה ואיפה."
+                    description="מבט קצר על הזרימות המרכזיות במערכת."
                   />
                   <InfoPanelBody>
                     <InfoPanelSection title="הזרימה המלאה">
@@ -135,7 +135,7 @@ export default function HelpPage() {
                       עבודה לפי תפקיד
                     </CardTitle>
                     <CardDescription>
-                      כל אחד מהתפקידים במערכת מקבל תצוגה והרשאות שונות. כאן אפשר לראות את חלוקת האחריות בצורה מרוכזת.
+                      כאן אפשר לראות בקצרה מי עושה מה במערכת.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="grid gap-4 lg:grid-cols-2">
@@ -165,7 +165,7 @@ export default function HelpPage() {
                 <Alert>
                   <AlertTitle>נקודת התחלה טובה</AlertTitle>
                   <AlertDescription>
-                    אם משהו לא ברור בתוך המערכת, בדרך כלל המסלול הכי מהיר הוא לחזור לעמוד הארגון, לבחור נקודה, ומשם להמשיך למסלול או לצוות הרלוונטי.
+                    אם משהו לא ברור, לרוב הכי פשוט לחזור לעמוד הארגון, לבחור נקודה ולהמשיך משם.
                   </AlertDescription>
                 </Alert>
               </PageMainContent>

@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useState, type CSSProperties } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { CircleAlert, MapPinned, PlusCircle, Route, ShieldCheck } from "lucide-react"
+import { CircleAlert, PlusCircle, Route } from "lucide-react"
 
 import { AppSidebar } from "@/components/app-sidebar"
 import {
@@ -10,8 +10,6 @@ import {
   InfoPanelDetailList,
   InfoPanelHeader,
   InfoPanelSection,
-  InfoPanelStat,
-  InfoPanelStats,
 } from "@/components/info-panel"
 import {
   PageBody,
@@ -301,7 +299,7 @@ export default function TrackCreatePage() {
   const [formData, setFormData] = useState<Record<string, Record<string, unknown>>>({})
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [loadingPermissions, setLoadingPermissions] = useState(true)
+  const [, setLoadingPermissions] = useState(true)
   const [canCreateTrack, setCanCreateTrack] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -315,14 +313,6 @@ export default function TrackCreatePage() {
     [selectedTrackType]
   )
   const formSections = selectedTrackType?.form_schema?.sections ?? []
-  const totalRequiredFields = useMemo(
-    () =>
-      formSections.reduce(
-        (count, section) => count + section.fields.filter((field) => field.required).length,
-        0
-      ),
-    [formSections]
-  )
   const initialStepKey = getInitialStepKey(selectedTrackType)
   const initialNodeTitle =
     selectedTrackSchema?.nodes.find((node) => node.id === initialStepKey)?.title || initialStepKey
@@ -666,7 +656,7 @@ export default function TrackCreatePage() {
                       title={selectedTrackType?.name?.trim() || "מסלול חדש"}
                       description={
                         point?.notes?.trim() ||
-                        "פתיחת רשומת מסלול חדשה בתוך הנקודה שנבחרה."
+                        "פתיחת מסלול חדש בנקודה שנבחרה."
                       }
                       badge={
                         <Badge
@@ -679,31 +669,6 @@ export default function TrackCreatePage() {
                     />
 
                     <InfoPanelBody>
-                      <InfoPanelStats>
-                        <InfoPanelStat
-                          icon={Route}
-                          label="מקטעים בטופס"
-                          value={formSections.length}
-                          description="מספר אזורי הקלט שהוגדרו למסלול הזה"
-                        />
-                        <InfoPanelStat
-                          icon={ShieldCheck}
-                          label="שדות חובה"
-                          value={totalRequiredFields}
-                          description="שדות שחייבים מילוי לפני פתיחת הרשומה"
-                        />
-                        <InfoPanelStat
-                          icon={MapPinned}
-                          label="SLA פתיחה"
-                          value={formatMinutesLabel(Number(trackSlaMinutes) || 0)}
-                          description={
-                            slaMode === "derived"
-                              ? "המערכת תוסיף modifiers מהצמתים לאורך המסלול"
-                              : "המסלול יעבוד עם SLA ידני קבוע"
-                          }
-                        />
-                      </InfoPanelStats>
-
                       <InfoPanelSection title="הקשר פתיחה">
                         <InfoPanelDetailList>
                           <InfoPanelDetail
@@ -724,24 +689,8 @@ export default function TrackCreatePage() {
                         </InfoPanelDetailList>
                       </InfoPanelSection>
 
-                      <InfoPanelSection title="הגדרת המסלול">
+                      <InfoPanelSection title="זמן יעד">
                         <div className="space-y-4">
-                          <div className="space-y-2">
-                            <div className="text-sm font-medium">סוג מסלול</div>
-                            <Select value={selectedTrackTypeId} onValueChange={setSelectedTrackTypeId}>
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder="בחרו סוג מסלול" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {trackTypes.map((trackType) => (
-                                  <SelectItem key={trackType.id} value={trackType.id.toString()}>
-                                    {trackType.name?.trim() || `Track type #${trackType.id}`}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
                           <div className="space-y-2">
                             <div className="text-sm font-medium">מצב SLA</div>
                             <Select
@@ -753,10 +702,10 @@ export default function TrackCreatePage() {
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="derived">
-                                  Derived · SLA בסיסי עם modifiers
+                                  נגזר · לפי ה־SLA הכללי והשלבים
                                 </SelectItem>
                                 <SelectItem value="manual">
-                                  Manual · SLA ידני ללא modifiers
+                                  ידני · ערך קבוע למסלול
                                 </SelectItem>
                               </SelectContent>
                             </Select>
@@ -773,38 +722,25 @@ export default function TrackCreatePage() {
                             />
                             <div className="text-xs text-muted-foreground">
                               {slaMode === "derived"
-                                ? "המערכת תיקח בחשבון גם SLA modifiers של צמתים קיצוניים."
-                                : "המערכת תתעלם מ-sla_modifier ותשאיר את הערך הידני כמו שהוא."}
+                                ? "הערך יתעדכן גם לפי ההשפעה של שלבי המסלול."
+                                : "הערך יישאר קבוע לאורך כל המסלול."}
                             </div>
                           </div>
+
+                          <InfoPanelDetailList>
+                            <InfoPanelDetail
+                              label="SLA נוכחי"
+                              value={formatMinutesLabel(Number(trackSlaMinutes) || 0)}
+                            />
+                          </InfoPanelDetailList>
                         </div>
                       </InfoPanelSection>
-
-                      <InfoPanelSection
-                        icon={ShieldCheck}
-                        title="הרשאות יצירה"
-                        description={
-                          canCreateTrack
-                            ? "יצירת מסלולים זמינה למשתמשי הנקודה הפעילים ולמנהלי הארגון."
-                            : "החשבון הזה יכול לצפות במבנה, אבל אינו מורשה לפתוח רשומות מסלול חדשות."
-                        }
-                      />
 
                       {error ? (
                         <Alert variant="destructive">
                           <CircleAlert className="size-4" />
                           <AlertTitle>לא ניתן לשמור כרגע</AlertTitle>
                           <AlertDescription>{error}</AlertDescription>
-                        </Alert>
-                      ) : null}
-
-                      {!canCreateTrack && !loadingPermissions ? (
-                        <Alert variant="destructive">
-                          <CircleAlert className="size-4" />
-                          <AlertTitle>אין הרשאה ליצירת מסלול</AlertTitle>
-                          <AlertDescription>
-                            יצירת מסלולים זמינה למשתמשי הנקודה הפעילים ולמנהלי הארגון.
-                          </AlertDescription>
                         </Alert>
                       ) : null}
 
@@ -827,8 +763,7 @@ export default function TrackCreatePage() {
                         טופס יצירה
                       </CardTitle>
                       <CardDescription>
-                        הטופס נבנה מתוך מבנה המסלול שנבחר, כדי לשמור על התאמה מלאה בין
-                        תבנית המסלול לבין המידע שנשמר ברשומה.
+                        הטופס משתנה לפי סוג המסלול שבחרתם.
                       </CardDescription>
                     </CardHeader>
 
@@ -847,7 +782,7 @@ export default function TrackCreatePage() {
                               <div className="space-y-1">
                                 <div className="font-medium">סוג המסלול</div>
                                 <div className="text-sm text-muted-foreground">
-                                  בחרו קודם את סוג המסלול. הטופס למטה יתעדכן מיד לפי הבחירה.
+                                  בחרו סוג מסלול כדי לטעון את טופס הפתיחה המתאים.
                                 </div>
                               </div>
                               <Badge variant="outline" className="rounded-full">

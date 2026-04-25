@@ -277,10 +277,10 @@ export default function OrganizationMemberCreatePage() {
               <PageMainLayout>
                 <PageMainRail>
                   <InfoPanel>
-                    <InfoPanelHeader
-                      icon={ShieldUser}
-                      title={selectedOrganization.name?.trim() || `ארגון #${selectedOrganization.id}`}
-                      description={selectedOrganization.notes?.trim() || "יצירת חבר חדש לארגון מתוך flow ייעודי ונקי."}
+                      <InfoPanelHeader
+                        icon={ShieldUser}
+                        title={selectedOrganization.name?.trim() || `ארגון #${selectedOrganization.id}`}
+                        description={selectedOrganization.notes?.trim() || "יצירת חבר חדש לארגון."}
                       badge={<Badge variant={canManage ? "default" : "outline"}>{canManage ? "בעלים" : "קריאה בלבד"}</Badge>}
                     />
                     <InfoPanelBody>
@@ -302,7 +302,7 @@ export default function OrganizationMemberCreatePage() {
                         יצירת חבר ארגון
                       </CardTitle>
                       <CardDescription>
-                        הגדירו אימייל, שם, תפקיד וטייטל. לאחר היצירה תתקבל סיסמה זמנית שאפשר למסור למשתמש.
+                        מלאו את פרטי המשתמש החדש והוסיפו אותו לארגון.
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-5">
@@ -331,7 +331,7 @@ export default function OrganizationMemberCreatePage() {
                         <Alert>
                           <AlertTitle>סיסמה זמנית</AlertTitle>
                           <AlertDescription className="flex flex-col gap-3">
-                            <span>מסרו למשתמש את הסיסמה הזמנית לצורך כניסה ראשונה.</span>
+                            <span>אפשר למסור למשתמש את הסיסמה הזו לכניסה הראשונה.</span>
                             <div className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
                               <code className="text-sm">{createdPassword}</code>
                               <Button variant="outline" size="sm" className="rounded-xl" onClick={handleCopyPassword}>

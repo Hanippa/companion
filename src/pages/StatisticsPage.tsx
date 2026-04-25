@@ -267,7 +267,7 @@ export default function StatisticsPage() {
                       title={getOrganizationLabel(selectedOrganization)}
                       description={
                         selectedOrganization?.notes?.trim() ||
-                        "תמונת מצב תפעולית מרוכזת של הארגון, הנקודות והמסלולים."
+                        "תמונת מצב של הארגון, הנקודות והמסלולים."
                       }
                       badge={
                         <Badge variant="outline" className="rounded-full">
@@ -281,7 +281,7 @@ export default function StatisticsPage() {
                           icon={MapPinned}
                           label="נקודות"
                           value={loadingStats ? "..." : points.length}
-                          description="כל הנקודות הפעילות בארגון"
+                          description="הנקודות הפעילות בארגון"
                         />
                         <InfoPanelStat
                           icon={Users2}
@@ -325,7 +325,7 @@ export default function StatisticsPage() {
                             מדדי ליבה
                           </CardTitle>
                           <CardDescription>
-                            סקירה מהירה של מבנה הארגון והעומס התפעולי שלו כרגע.
+                            סקירה מהירה של מצב הארגון כרגע.
                           </CardDescription>
                         </CardHeader>
                         <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -333,25 +333,25 @@ export default function StatisticsPage() {
                             icon={MapPinned}
                             label="נקודות"
                             value={points.length}
-                            description="מרכזי שירות ונקודות עבודה"
+                            description="נקודות פעילות"
                           />
                           <StatCard
                             icon={Workflow}
                             label="סוגי מסלולים"
                             value={trackTypes.length}
-                            description="תבניות מעקב זמינות"
+                            description="סוגי מסלולים זמינים"
                           />
                           <StatCard
                             icon={Route}
                             label="מסלולים פעילים"
                             value={activeTracksCount}
-                            description="רשומות שטיפולן עדיין פתוח"
+                            description="מסלולים שעדיין בטיפול"
                           />
                           <StatCard
                             icon={Users2}
                             label="חברי צוות"
                             value={teamCount}
-                            description="משתמשים פעילים בארגון"
+                            description="משתמשים פעילים"
                           />
                         </CardContent>
                       </Card>
@@ -360,7 +360,7 @@ export default function StatisticsPage() {
                         <CardHeader>
                           <CardTitle className="text-xl">מסלולים אחרונים</CardTitle>
                           <CardDescription>
-                            מבט קצר על הרשומות שהתעדכנו לאחרונה בארגון.
+                            המסלולים שהתעדכנו לאחרונה בארגון.
                           </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -368,7 +368,7 @@ export default function StatisticsPage() {
                             <Alert>
                               <AlertTitle>אין עדיין פעילות</AlertTitle>
                               <AlertDescription>
-                                בארגון הזה עדיין לא נפתחו מסלולים שמוצגים בסטטיסטיקות.
+                                עדיין אין מסלולים שמופיעים בסטטיסטיקות.
                               </AlertDescription>
                             </Alert>
                           ) : (

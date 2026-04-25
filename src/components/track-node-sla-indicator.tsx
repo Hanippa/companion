@@ -69,7 +69,9 @@ export function TrackNodeSlaIndicator({
           <div
             className={cn(
               "rounded-full px-2.5 py-1 text-xs font-medium tabular-nums",
-              isOverdue ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"
+              isOverdue
+                ? "bg-destructive/10 text-destructive"
+                : "bg-primary/10 text-emerald-950/80"
             )}
           >
             {isOverdue ? "חריגה " : ""}
@@ -83,10 +85,10 @@ export function TrackNodeSlaIndicator({
           <div
             className={cn(
               "h-full rounded-full transition-[width] duration-500",
-              status === "completed" && !isOverdue && "bg-primary/80",
+              status === "completed" && !isOverdue && "bg-lime-500/80",
               status === "completed" && isOverdue && "bg-destructive/80",
               status === "pending" && "bg-muted-foreground/30",
-              status === "current" && !isOverdue && "bg-primary animate-pulse",
+              status === "current" && !isOverdue && "bg-lime-500 animate-pulse",
               status === "current" && isOverdue && "bg-destructive animate-pulse"
             )}
             style={{ width: `${clampedProgress}%` }}

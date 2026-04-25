@@ -9,6 +9,7 @@ import PointTeamPage from "./pages/PointTeamPage";
 import PointMemberCreatePage from "./pages/PointMemberCreatePage";
 import TrackCreatePage from "./pages/TrackCreatePage";
 import TrackPage from "./pages/TrackPage";
+import TrackEditPage from "./pages/TrackEditPage";
 import PublicTrackPage from "./pages/PublicTrackPage";
 import TrackTypesPage from "./pages/TrackTypesPage";
 import OrganizationTeamPage from "./pages/OrganizationTeamPage";
@@ -59,6 +60,7 @@ function App() {
         <Route path="/:organizationSlug/:pointSlug/team/new" element={<PointMemberCreatePage />} />
         <Route path="/:organizationSlug/:pointSlug/edit" element={<PointEditPage />} />
         <Route path="/:organizationSlug/:pointSlug/track/new" element={<TrackCreatePage />} />
+        <Route path="/:organizationSlug/:pointSlug/track/:trackSlug/edit" element={<TrackEditPage />} />
         <Route path="/:organizationSlug/:pointSlug/track/:trackSlug" element={<TrackPage />} />
         <Route path="/:organizationSlug/:pointSlug" element={<PointPage />} />
       </Route>

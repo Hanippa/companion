@@ -100,6 +100,15 @@ export function buildTrackJourneyVisits<TEvent extends JourneyEvent>({
       continue
     }
 
+    const explicitVisitId = getPayloadString(event.payload, "visit_id")
+    if (explicitVisitId) {
+      const explicitVisit = visits.find((visit) => visit.visitId === explicitVisitId)
+      if (explicitVisit) {
+        explicitVisit.events.push(event)
+        continue
+      }
+    }
+
     if (currentVisit && (!event.step_key || event.step_key === currentVisit.nodeId)) {
       currentVisit.events.push(event)
       continue

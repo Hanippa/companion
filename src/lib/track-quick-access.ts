@@ -3,6 +3,7 @@ export type TrackQuickAccessItem = {
   name: string | null
   url: string
   pointName?: string | null
+  trackTypeName?: string | null
   refId?: number | null
   currentStepKey?: string | null
   lastOpenedAt: string
@@ -15,6 +16,7 @@ type TrackQuickAccessState = {
 }
 
 const STORAGE_PREFIX = "companion.trackQuickAccess"
+export const TRACK_QUICK_ACCESS_EVENT = "companion:track-quick-access-updated"
 const MAX_RECENT_TRACKS = 8
 const MAX_PINNED_TRACKS = 6
 
@@ -27,6 +29,7 @@ const sanitizeItem = (item: TrackQuickAccessItem): TrackQuickAccessItem => ({
   name: item.name ?? null,
   url: item.url,
   pointName: item.pointName ?? null,
+  trackTypeName: item.trackTypeName ?? null,
   refId: typeof item.refId === "number" ? item.refId : null,
   currentStepKey: item.currentStepKey ?? null,
   lastOpenedAt: item.lastOpenedAt,
@@ -64,6 +67,11 @@ export function writeTrackQuickAccess(userId: string, state: TrackQuickAccessSta
   if (!isBrowser()) return
 
   window.localStorage.setItem(getStorageKey(userId), JSON.stringify(state))
+  window.dispatchEvent(
+    new CustomEvent(TRACK_QUICK_ACCESS_EVENT, {
+      detail: { userId },
+    })
+  )
 }
 
 export function addRecentTrack(userId: string, item: Omit<TrackQuickAccessItem, "lastOpenedAt">) {
@@ -141,6 +149,17 @@ export function removeRecentTrack(userId: string, trackId: number) {
   const current = readTrackQuickAccess(userId)
   const nextState = {
     ...current,
+    recent: current.recent.filter((item) => item.id !== trackId),
+  }
+
+  writeTrackQuickAccess(userId, nextState)
+  return nextState
+}
+
+export function removeTrackQuickAccessItem(userId: string, trackId: number) {
+  const current = readTrackQuickAccess(userId)
+  const nextState = {
+    pinned: current.pinned.filter((item) => item.id !== trackId),
     recent: current.recent.filter((item) => item.id !== trackId),
   }
 

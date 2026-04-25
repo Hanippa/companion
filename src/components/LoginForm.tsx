@@ -102,14 +102,20 @@ export function LoginForm({
             ברוכים הבאים
           </CardTitle>
           <CardDescription>
-            התחברו באמצעות חשבון המיקרוסופט שלכם או קבלו קישור כניסה למייל.
+            קבלו קישור כניסה למייל והתחברו בצורה מאובטחת.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin}>
             <FieldGroup>
               <Field>
-                <Button variant="outline" type="button">
+                <Button
+                  variant="outline"
+                  type="button"
+                  disabled
+                  className="justify-between text-muted-foreground opacity-70"
+                >
+                  <span className="flex items-center gap-2">
                   <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 21 21">
                     <title>MS-SymbolLockup</title>
                     <rect x="1" y="1" width="9" height="9" fill="#f25022" />
@@ -118,6 +124,10 @@ export function LoginForm({
                     <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
                   </svg>
                   התחברות עם מיקרוסופט
+                  </span>
+                  <span className="rounded-full border border-border/70 bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                    בקרוב
+                  </span>
                 </Button>
               </Field>
               <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">

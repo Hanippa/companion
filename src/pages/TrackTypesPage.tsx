@@ -657,8 +657,8 @@ export default function TrackTypesPage() {
                       title={draftName.trim() || "סוג מסלול חדש"}
                       description={
                         selectedTrackTypeId === "new"
-                          ? "מגדירים כאן תבנית חדשה למסלולים עתידיים"
-                          : "עריכת תבנית מסלול קיימת בארגון"
+                          ? "הגדרת סוג מסלול חדש"
+                          : "עריכת סוג מסלול קיים"
                       }
                       badge={
                         <Badge variant={draftStatus === "active" ? "default" : "outline"}>
@@ -670,10 +670,10 @@ export default function TrackTypesPage() {
                       <InfoPanelSection
                         className="border-primary/30 bg-primary/10 ring-1 ring-primary/35"
                         title="פרטי סוג המסלול"
-                        description="הפרטים המרכזיים של סוג המסלול, כפי שיופיעו וינוהלו בארגון."
+                        description="השם, הגרסה וה־SLA של סוג המסלול."
                         action={
                           <InlineHelp title="מה מגדירים כאן?">
-                            כאן מגדירים את הזהות של סוג המסלול: השם שלו, הגרסה הפעילה, הסטטוס וה־SLA הכללי שממנו המסלול מתחיל.
+                            כאן מגדירים את הפרטים הראשיים של סוג המסלול לפני שבונים את המפה והטופס.
                           </InlineHelp>
                         }
                       >
@@ -700,8 +700,8 @@ export default function TrackTypesPage() {
                                   {selectedTrackTypeId === "new"
                                     ? "סוג מסלול חדש נוצר כפעיל כברירת מחדל."
                                     : draftStatus === "active"
-                                      ? "התבנית זמינה לשימוש בעת יצירת מסלולים חדשים."
-                                      : "התבנית מושבתת ולא אמורה לשמש לפתיחת מסלולים חדשים."}
+                                      ? "אפשר להשתמש בסוג המסלול הזה ביצירת מסלולים חדשים."
+                                      : "סוג המסלול הזה לא יוצג ביצירת מסלולים חדשים."}
                                 </div>
                               </div>
                               <Badge variant={draftStatus === "active" ? "default" : "outline"}>
@@ -737,7 +737,7 @@ export default function TrackTypesPage() {
                         <div className="space-y-1">
                           <CardTitle className="text-xl">בניית סוג מסלול</CardTitle>
                           <CardDescription>
-                            בוחרים תבנית קיימת או מתחילים חדשה, ואז עובדים בשני אזורים ברורים: מפת המסלול וטופס הפתיחה.
+                            בחרו סוג מסלול קיים או התחילו חדש, ואז ערכו את מפת המסלול ואת טופס הפתיחה.
                           </CardDescription>
                         </div>
                         {canManage ? <Button variant="outline" size="sm" className="rounded-xl" onClick={handleCreateNew}><GitBranchPlus className="size-4" />סוג מסלול חדש</Button> : null}
@@ -751,7 +751,7 @@ export default function TrackTypesPage() {
                           <div className="flex items-center gap-2 text-sm font-medium">
                             <span>עם איזה סוג מסלול עובדים עכשיו?</span>
                             <InlineHelp title="בחירה או יצירה של סוג מסלול">
-                              בחרו סוג מסלול קיים כדי לערוך אותו, או התחילו מסוג חדש. אחרי הבחירה עובדים על המפה או על טופס הפתיחה.
+                              בחרו סוג מסלול קיים כדי לערוך אותו, או התחילו מסוג חדש.
                             </InlineHelp>
                           </div>
                           <div className="flex flex-wrap gap-2">
@@ -771,10 +771,10 @@ export default function TrackTypesPage() {
                         </div>
                         <div className="rounded-2xl border border-border/60 bg-background/80 p-4 text-sm leading-6 text-muted-foreground">
                               <div className="font-medium text-foreground">
-                                {selectedTrackTypeId === "new" ? "כרגע אתם בונים סוג מסלול חדש" : `כרגע עורכים: ${currentTrackTypeLabel}`}
+                                {selectedTrackTypeId === "new" ? "עובדים על סוג מסלול חדש" : `עורכים כעת: ${currentTrackTypeLabel}`}
                               </div>
                           <div className="mt-2">
-                            המפה משמאל מציגה את הזרימה המלאה. הסרגל הימני משמש לעריכה מדויקת של סוג המסלול ושל השלב שבחרתם.
+                            בחרו אם לעבוד על מפת המסלול או על טופס הפתיחה.
                           </div>
                         </div>
                       </div>

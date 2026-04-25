@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react"
+import { useDeferredValue, useEffect, useMemo, useState, type CSSProperties } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import {
   ArrowLeft,
@@ -7,6 +7,7 @@ import {
   CircleAlert,
   GitBranchPlus,
   MapPinned,
+  Pin,
   Plus,
   ShieldUser,
   Sparkles,
@@ -41,6 +42,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { useAuth } from "@/contexts/AuthContext"
@@ -51,6 +53,7 @@ import {
   getRecordIdFromSegment,
 } from "@/lib/drilldown"
 import { getOrganizationsCached } from "@/lib/organizations"
+import { pinPoint, readPinnedPoints, unpinPoint } from "@/lib/point-quick-access"
 import { getProfilesByIdsCached } from "@/lib/profile-cache"
 import { supabase } from "@/lib/supabase"
 
@@ -136,6 +139,9 @@ export default function Dashboard() {
   const [canManageTrackTypes, setCanManageTrackTypes] = useState(false)
   const [loadingPoints, setLoadingPoints] = useState(false)
   const [pointsError, setPointsError] = useState<string | null>(null)
+  const [pointSearchQuery, setPointSearchQuery] = useState("")
+  const [pinnedPointIds, setPinnedPointIds] = useState<number[]>([])
+  const deferredPointSearchQuery = useDeferredValue(pointSearchQuery)
 
   useEffect(() => {
     let isMounted = true
@@ -195,6 +201,37 @@ export default function Dashboard() {
 
       return organization.id.toString() === selectedOrganizationId
     }) ?? null
+
+  useEffect(() => {
+    setPinnedPointIds(readPinnedPoints(user?.id))
+  }, [user?.id])
+
+  const filteredPoints = useMemo(() => {
+    const normalizedQuery = deferredPointSearchQuery.trim().toLocaleLowerCase("he-IL")
+
+    const matchingPoints = normalizedQuery
+      ? pointsWithStats.filter((point) => {
+          const pointName = point.name?.trim().toLocaleLowerCase("he-IL") || ""
+          const pointNotes = point.notes?.trim().toLocaleLowerCase("he-IL") || ""
+
+          return pointName.includes(normalizedQuery) || pointNotes.includes(normalizedQuery)
+        })
+      : pointsWithStats
+
+    return [...matchingPoints].sort((left, right) => {
+      const leftPinned = pinnedPointIds.includes(left.id)
+      const rightPinned = pinnedPointIds.includes(right.id)
+
+      if (leftPinned === rightPinned) return 0
+      return leftPinned ? -1 : 1
+    })
+  }, [deferredPointSearchQuery, pinnedPointIds, pointsWithStats])
+
+  const handlePointPinToggle = (pointId: number, pinned: boolean) => {
+    if (!user?.id) return
+
+    setPinnedPointIds(pinned ? unpinPoint(user.id, pointId) : pinPoint(user.id, pointId))
+  }
 
   useEffect(() => {
     if (loadingOrganizations || organizationsError || organizations.length === 0) {
@@ -517,7 +554,7 @@ export default function Dashboard() {
                             <InfoPanelSection
                               icon={Sparkles}
                               title="פעולות מהירות"
-                              description="הפעולות המרכזיות של הארגון ."
+                              description="הפעולות הנפוצות לניהול הארגון."
                             >
                               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
                                 <Button
@@ -560,7 +597,7 @@ export default function Dashboard() {
                           <InfoPanelSection
                             icon={Users2}
                             title="חברי ארגון"
-                            description="חברי הצוות הפעילים בארגון."
+                            description="תצוגה מקוצרת של חברי הצוות הפעילים."
                           >
                             <OrganizationMembersList
                               members={displayedOrganizationMembers}
@@ -586,13 +623,27 @@ export default function Dashboard() {
                                 נקודות הארגון
                               </CardTitle>
                               <CardDescription className="max-w-2xl leading-7">
-                                הנקודות הפעילות בארגון.
+                                כל הנקודות הפעילות בארגון. נקודות מוצמדות יופיעו קודם.
                               </CardDescription>
                             </div>
 
                             <Badge variant="outline" className="rounded-full">
-                              סה"כ {points.length} נקודות
+                              {deferredPointSearchQuery.trim()
+                                ? `${filteredPoints.length} מתוך ${points.length} נקודות`
+                                : `סה"כ ${points.length} נקודות`}
                             </Badge>
+                          </div>
+                          <div className="space-y-2">
+                            <label htmlFor="dashboard-points-search" className="text-sm font-medium">
+                              חיפוש נקודות
+                            </label>
+                            <Input
+                              id="dashboard-points-search"
+                              value={pointSearchQuery}
+                              onChange={(event) => setPointSearchQuery(event.target.value)}
+                              placeholder="חיפוש לפי שם נקודה או תיאור"
+                              className="rounded-xl"
+                            />
                           </div>
                         </CardHeader>
 
@@ -611,13 +662,23 @@ export default function Dashboard() {
                               לארגון הזה אין כרגע נקודות שזמינות לחשבון שלך.
                             </AlertDescription>
                           </Alert>
+                        ) : filteredPoints.length === 0 ? (
+                          <Alert>
+                            <MapPinned className="size-4" />
+                            <AlertTitle>לא נמצאו נקודות</AlertTitle>
+                            <AlertDescription>
+                              לא נמצאו נקודות שתואמות ל־"{deferredPointSearchQuery}".
+                            </AlertDescription>
+                          </Alert>
                         ) : (
                           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                            {pointsWithStats.map((point) => (
+                            {filteredPoints.map((point) => (
                               <DashboardPointCard
                                 key={point.id}
                                 point={point}
                                 profilesById={profilesById}
+                                isPinned={pinnedPointIds.includes(point.id)}
+                                onPinToggle={handlePointPinToggle}
                                 onOpen={() => handlePointOpen(point)}
                               />
                             ))}
@@ -685,69 +746,111 @@ function DashboardSkeleton() {
 function DashboardPointCard({
   point,
   profilesById,
+  isPinned,
+  onPinToggle,
   onOpen,
 }: {
   point: PointWithStats
   profilesById: Record<string, ProfileSummary>
+  isPinned: boolean
+  onPinToggle: (pointId: number, pinned: boolean) => void
   onOpen: () => void
 }) {
   return (
     <Card
       size="sm"
-      className="point-entry-card overflow-hidden border-border/70 bg-card/95 shadow-none"
+      className="entity-entry-card overflow-hidden border-border/70 bg-card/95 shadow-none"
     >
-      <CardHeader className="gap-2 pb-2.5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1">
-            <div className="flex items-center gap-2 text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
-              <MapPinned className="size-3.5" />
-              נקודה
-            </div>
-            <CardTitle className="truncate text-base">{getPointLabel(point)}</CardTitle>
+      <CardHeader className="gap-3 pb-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
+            <MapPinned className="size-3.5" />
+            נקודה
           </div>
-          <Badge
-            variant={point.status === "active" ? "default" : "outline"}
-            className="shrink-0 rounded-full px-2 py-0.5 text-[11px]"
-          >
-            {getStatusLabel(point.status)}
-          </Badge>
+          <div className="flex shrink-0 items-center gap-2">
+            <Badge
+              variant={point.status === "active" ? "default" : "outline"}
+              className="rounded-full px-2 py-0.5 text-[11px]"
+            >
+              {getStatusLabel(point.status)}
+            </Badge>
+            <Button
+              type="button"
+              variant={isPinned ? "default" : "outline"}
+              size="icon-xs"
+              className="rounded-full"
+              onClick={() => onPinToggle(point.id, isPinned)}
+              aria-label={isPinned ? "הסרת הצמדה" : "הצמדת נקודה"}
+              title={isPinned ? "הסרת הצמדה" : "הצמדת נקודה"}
+            >
+              <Pin className="size-3.5" />
+            </Button>
+          </div>
         </div>
-
-        <CardDescription className="line-clamp-1 leading-5">
-          {getPointDescription(point)}
-        </CardDescription>
+        <div className="min-w-0 space-y-1">
+          <CardTitle className="line-clamp-2 text-base leading-6">{getPointLabel(point)}</CardTitle>
+          <CardDescription className="line-clamp-1 leading-5">
+            {getPointDescription(point)}
+          </CardDescription>
+        </div>
       </CardHeader>
 
-      <CardContent className="space-y-2">
-        <div className="rounded-[1.1rem] border border-border/60 bg-linear-to-l from-muted/5 via-background to-background px-3 py-2.5">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Users2 className="size-4 text-muted-foreground" />
-              צוות נקודה
-            </div>
-            <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[11px]">
-              {point.membersCount}
-            </Badge>
+      <CardContent className="pb-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            חברי צוות
           </div>
-          <MemberAvatarStack
-            memberIds={point.memberIds}
-            profilesById={profilesById}
-            size="sm"
-          />
+          <CompactMemberAvatarStack memberIds={point.memberIds} profilesById={profilesById} />
         </div>
       </CardContent>
 
-      <CardFooter className="border-t border-border/60 pt-2.5">
+      <CardFooter className="border-t border-border/60 pt-3">
         <Button
           className="group h-9 w-full justify-between rounded-xl px-3"
           variant="outline"
           onClick={onOpen}
         >
-          מעבר לעמוד הנקודה
+          פתיחת נקודה
           <ArrowLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-1" />
         </Button>
       </CardFooter>
     </Card>
+  )
+}
+
+function CompactMemberAvatarStack({
+  memberIds,
+  profilesById,
+}: {
+  memberIds: string[]
+  profilesById: Record<string, ProfileSummary>
+}) {
+  const visibleMemberIds = memberIds.slice(0, POINT_MEMBER_AVATAR_LIMIT)
+  const overflowCount = Math.max(memberIds.length - visibleMemberIds.length, 0)
+
+  if (visibleMemberIds.length === 0) {
+    return <div className="text-xs text-muted-foreground">אין חברים להצגה</div>
+  }
+
+  return (
+    <AvatarGroup>
+      {visibleMemberIds.map((memberId) => {
+        const member = profilesById[memberId]
+
+        return (
+          <Avatar key={memberId} size="sm">
+            <AvatarImage
+              src={member?.avatar_url ?? undefined}
+              alt={member?.display_name ?? "חבר צוות"}
+              loading="lazy"
+              referrerPolicy="no-referrer"
+            />
+            <AvatarFallback>{getAvatarInitials(member?.display_name)}</AvatarFallback>
+          </Avatar>
+        )
+      })}
+      {overflowCount > 0 ? <AvatarGroupCount>+{overflowCount}</AvatarGroupCount> : null}
+    </AvatarGroup>
   )
 }
 
@@ -841,41 +944,4 @@ function OrganizationMembersList({
   )
 }
 
-function MemberAvatarStack({
-  memberIds,
-  profilesById,
-  size = "default",
-}: {
-  memberIds: string[]
-  profilesById: Record<string, ProfileSummary>
-  size?: "default" | "sm"
-}) {
-  const visibleMemberIds = memberIds.slice(0, POINT_MEMBER_AVATAR_LIMIT)
-  const overflowCount = Math.max(memberIds.length - visibleMemberIds.length, 0)
-
-  if (visibleMemberIds.length === 0) {
-    return <div className="text-xs text-muted-foreground">עדיין אין חברים להצגה</div>
-  }
-
-  return (
-    <AvatarGroup>
-      {visibleMemberIds.map((memberId) => {
-        const member = profilesById[memberId]
-
-        return (
-          <Avatar key={memberId} size={size}>
-            <AvatarImage
-              src={member?.avatar_url ?? undefined}
-              alt={member?.display_name ?? "חבר צוות"}
-              loading="lazy"
-              referrerPolicy="no-referrer"
-            />
-            <AvatarFallback>{getAvatarInitials(member?.display_name)}</AvatarFallback>
-          </Avatar>
-        )
-      })}
-      {overflowCount > 0 ? <AvatarGroupCount>+{overflowCount}</AvatarGroupCount> : null}
-    </AvatarGroup>
-  )
-}
 

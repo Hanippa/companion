@@ -2,6 +2,7 @@
 import { useNavigate, useParams } from "react-router-dom"
 import {
   CircleAlert,
+  ChevronDown,
   PencilLine,
   Link2,
   Route,
@@ -32,14 +33,6 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { useAuth } from "@/contexts/AuthContext"
 import { getOrganizationSegment, getPointSegment, getRecordIdFromSegment, getTrackSegment } from "@/lib/drilldown"
@@ -52,6 +45,7 @@ import {
   upsertTrackingRecordSearch,
 } from "@/lib/tracking-record-search"
 import { calculateTrackSlaSummary, formatMinutesLabel, formatRemainingLabel } from "@/lib/track-sla"
+import { cn } from "@/lib/utils"
 
 type Organization = {
   id: number
@@ -119,6 +113,7 @@ type SidebarCurrentTrack = {
   name: string | null
   url: string
   pointName?: string | null
+  trackTypeName?: string | null
   refId?: number | null
   currentStepKey?: string | null
 }
@@ -190,6 +185,18 @@ export default function TrackPage() {
   const [trackSlaDraft, setTrackSlaDraft] = useState("0")
   const [savingSla, setSavingSla] = useState(false)
   const [canManageSla, setCanManageSla] = useState(false)
+  const [canManageTrack, setCanManageTrack] = useState(false)
+  const [activeInlinePanel, setActiveInlinePanel] = useState<"sla" | null>(null)
+  const [isRecordDataOpen, setIsRecordDataOpen] = useState(false)
+  const [activeEventVisitId, setActiveEventVisitId] = useState<string | null>(null)
+  const [customEventTitle, setCustomEventTitle] = useState("")
+  const [customEventNote, setCustomEventNote] = useState("")
+  const [savingCustomEvent, setSavingCustomEvent] = useState(false)
+  const [activeEditEventId, setActiveEditEventId] = useState<number | null>(null)
+  const [editEventTitle, setEditEventTitle] = useState("")
+  const [editEventNote, setEditEventNote] = useState("")
+  const [savingEditedEvent, setSavingEditedEvent] = useState(false)
+  const [deletingEventId, setDeletingEventId] = useState<number | null>(null)
   const [currentActor, setCurrentActor] = useState<CurrentActor>({
     user_id: null,
     actor_name: null,
@@ -544,6 +551,7 @@ export default function TrackPage() {
     const loadSlaPermissions = async () => {
       if (!selectedOrganization || !track?.point || !user?.id) {
         setCanManageSla(false)
+        setCanManageTrack(false)
         return
       }
 
@@ -561,7 +569,7 @@ export default function TrackPage() {
           .eq("point_id", track.point.id)
           .eq("user_id", user.id)
           .eq("status", "active")
-          .eq("role", "admin"),
+          .in("role", ["admin", "owner"]),
       ])
 
       if (!isMounted) return
@@ -572,13 +580,16 @@ export default function TrackPage() {
           pointPermissionError: pointPermissionResult.error,
         })
         setCanManageSla(false)
+        setCanManageTrack(false)
         return
       }
 
-      setCanManageSla(
+      const hasManagementAccess =
         (orgPermissionResult.data ?? []).length > 0 ||
           (pointPermissionResult.data ?? []).length > 0
-      )
+
+      setCanManageSla(hasManagementAccess)
+      setCanManageTrack(hasManagementAccess)
     }
 
     void loadSlaPermissions()
@@ -777,6 +788,7 @@ export default function TrackPage() {
         name: track.name ?? track.trackType?.name ?? null,
       })}`,
       pointName: track.point.name,
+      trackTypeName: track.trackType?.name,
       refId: track.refId,
       currentStepKey: track.currentNode?.title ?? track.currentStepKey,
     }
@@ -827,6 +839,170 @@ export default function TrackPage() {
       setTrackError("לא הצלחנו לעדכן את הגדרות ה-SLA כרגע.")
     } finally {
       setSavingSla(false)
+    }
+  }
+
+  const handleCreateCustomEvent = async (visitId: string) => {
+    if (!track || !currentActor.user_id || savingCustomEvent) return
+
+    const normalizedTitle = customEventTitle.trim()
+    const normalizedNote = customEventNote.trim()
+
+    if (!normalizedTitle) {
+      setTrackError("צריך לתת כותרת קצרה לאירוע לפני השמירה.")
+      return
+    }
+
+    setSavingCustomEvent(true)
+    setTrackError(null)
+
+    try {
+      const { data: insertedEvents, error } = await supabase
+        .from("tracking_record_events")
+        .insert({
+          tracking_record_id: track.id,
+          event_type: "general",
+          step_key: visitId.split("::")[0] ?? track.currentNode?.id ?? track.currentStepKey,
+          payload: {
+            kind: "custom",
+            visit_id: visitId,
+            title: normalizedTitle,
+            note: normalizedNote,
+          },
+        })
+        .select("id, user_id, event_type, step_key, payload, created_at")
+
+      if (error) throw error
+
+      const insertedEvent = insertedEvents?.[0] ?? null
+
+      if (insertedEvent) {
+        setEvents((currentEvents) => {
+          if (currentEvents.some((event) => event.id === insertedEvent.id)) {
+            return currentEvents
+          }
+
+          return [
+            ...currentEvents,
+            {
+              ...insertedEvent,
+              actor_name: currentActor.actor_name,
+              actor_avatar_url: currentActor.actor_avatar_url,
+            },
+          ].sort(
+            (left, right) =>
+              new Date(left.created_at).getTime() - new Date(right.created_at).getTime()
+          )
+        })
+      }
+
+      setCustomEventTitle("")
+      setCustomEventNote("")
+      setActiveEventVisitId(null)
+    } catch (error) {
+      console.error("Error creating custom track event:", error)
+      setTrackError("לא הצלחנו להוסיף את האירוע הידני כרגע.")
+    } finally {
+      setSavingCustomEvent(false)
+    }
+  }
+
+  const handleStartEditEvent = (event: TrackStepperEvent) => {
+    const currentTitle = typeof event.payload?.title === "string" ? event.payload.title : ""
+    const currentNote = typeof event.payload?.note === "string" ? event.payload.note : ""
+    const normalizedCurrentNote =
+      currentTitle && currentNote.startsWith(`${currentTitle}: `)
+        ? currentNote.slice(currentTitle.length + 2)
+        : currentNote
+
+    setActiveEditEventId(event.id)
+    setEditEventTitle(currentTitle)
+    setEditEventNote(normalizedCurrentNote)
+    setActiveEventVisitId(null)
+    setCustomEventTitle("")
+    setCustomEventNote("")
+    setTrackError(null)
+  }
+
+  const handleCancelEditEvent = () => {
+    if (savingEditedEvent || deletingEventId !== null) return
+    setActiveEditEventId(null)
+    setEditEventTitle("")
+    setEditEventNote("")
+  }
+
+  const handleSaveEditedEvent = async (eventId: number) => {
+    const normalizedTitle = editEventTitle.trim()
+    const normalizedNote = editEventNote.trim()
+
+    if (!normalizedTitle) {
+      setTrackError("צריך לתת כותרת קצרה לאירוע לפני השמירה.")
+      return
+    }
+
+    const targetEvent = events.find((event) => event.id === eventId)
+    if (!targetEvent) return
+
+    setSavingEditedEvent(true)
+    setTrackError(null)
+
+    try {
+      const nextPayload = {
+        ...(targetEvent.payload ?? {}),
+        title: normalizedTitle,
+        note: normalizedNote,
+      }
+
+      const { error } = await supabase
+        .from("tracking_record_events")
+        .update({ payload: nextPayload })
+        .eq("id", eventId)
+
+      if (error) throw error
+
+      setEvents((currentEvents) =>
+        currentEvents.map((event) =>
+          event.id === eventId
+            ? {
+                ...event,
+                payload: nextPayload,
+              }
+            : event
+        )
+      )
+      setActiveEditEventId(null)
+      setEditEventTitle("")
+      setEditEventNote("")
+    } catch (error) {
+      console.error("Error updating custom track event:", error)
+      setTrackError("לא הצלחנו לעדכן את האירוע הידני כרגע.")
+    } finally {
+      setSavingEditedEvent(false)
+    }
+  }
+
+  const handleDeleteEvent = async (event: TrackStepperEvent) => {
+    if (!window.confirm("למחוק את האירוע הידני הזה?")) return
+
+    setDeletingEventId(event.id)
+    setTrackError(null)
+
+    try {
+      const { error } = await supabase.from("tracking_record_events").delete().eq("id", event.id)
+      if (error) throw error
+
+      setEvents((currentEvents) => currentEvents.filter((currentEvent) => currentEvent.id !== event.id))
+
+      if (activeEditEventId === event.id) {
+        setActiveEditEventId(null)
+        setEditEventTitle("")
+        setEditEventNote("")
+      }
+    } catch (error) {
+      console.error("Error deleting custom track event:", error)
+      setTrackError("לא הצלחנו למחוק את האירוע הידני כרגע.")
+    } finally {
+      setDeletingEventId(null)
     }
   }
 
@@ -883,45 +1059,180 @@ export default function TrackPage() {
             ) : track ? (
               <PageMainLayout>
                 <PageMainContent className="xl:order-2">
-                  <Card className="border-border/70 shadow-none">
-                    <CardHeader className="gap-3">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="space-y-1">
-                          <CardTitle className="text-xl">התקדמות המסלול</CardTitle>
-                          <CardDescription>
-                            כאן רואים את התקדמות המסלול בפועל, את אירועי המעבר ואת האפשרויות
-                            הזמינות מהשלב הנוכחי.
-                          </CardDescription>
+                  <div
+                    dir="ltr"
+                    className={[
+                      "grid gap-4",
+                      activeInlinePanel === "sla"
+                        ? "xl:grid-cols-[minmax(22rem,0.78fr)_minmax(0,1.22fr)]"
+                        : "",
+                    ].join(" ").trim()}
+                  >
+                    {activeInlinePanel === "sla" ? (
+                      <Card
+                        dir="rtl"
+                        className="border-border/70 shadow-none xl:sticky xl:top-24 animate-in fade-in-0 zoom-in-95 slide-in-from-left-2 duration-200"
+                      >
+                        <CardHeader className="gap-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="space-y-1">
+                              <CardTitle className="text-xl">ניהול SLA</CardTitle>
+                              <CardDescription>
+                                כאן אפשר לראות ולעדכן את הגדרות ה-SLA של המסלול, בלי להפריע
+                                לעבודה על ההתקדמות עצמה.
+                              </CardDescription>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="rounded-xl"
+                              onClick={() => setActiveInlinePanel(null)}
+                            >
+                              סגירה
+                            </Button>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="space-y-5">
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
+                              <div className="text-xs text-muted-foreground">מצב חישוב</div>
+                              <div className="mt-2 text-sm font-medium">{slaModeLabel}</div>
+                            </div>
+                            <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
+                              <div className="text-xs text-muted-foreground">SLA בסיסי</div>
+                              <div className="mt-2 text-sm font-medium">
+                                {formatMinutesLabel(track.sla ?? track.trackType?.sla ?? null)}
+                              </div>
+                            </div>
+                            <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
+                              <div className="text-xs text-muted-foreground">תוספות שנצברו</div>
+                              <div className="mt-2 text-sm font-medium">
+                                {formatMinutesLabel(slaSummary.modifierMinutes)}
+                              </div>
+                            </div>
+                            <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
+                              <div className="text-xs text-muted-foreground">SLA לשלב הנוכחי</div>
+                              <div className="mt-2 text-sm font-medium">{currentNodeSlaLabel}</div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3 rounded-2xl border border-border/60 bg-background/70 p-4">
+                            <div className="space-y-1">
+                              <div className="text-sm font-medium">הגדרות מסלול</div>
+                              <div className="text-sm text-muted-foreground">
+                                {canManageSla
+                                  ? "אפשר לעדכן את מצב החישוב ואת ערך ה-SLA הבסיסי של המסלול."
+                                  : "אפשר לצפות בהגדרות ה-SLA, אך העריכה זמינה רק למנהלי נקודה וארגון."}
+                              </div>
+                            </div>
+
+                            <div className="grid gap-3">
+                              <select
+                                className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+                                value={slaModeDraft}
+                                onChange={(event) =>
+                                  setSlaModeDraft(event.target.value as "derived" | "manual")
+                                }
+                                disabled={!canManageSla || savingSla}
+                              >
+                                <option value="derived">נגזר · כולל תוספות של שלבים</option>
+                                <option value="manual">ידני · בלי תוספות של שלבים</option>
+                              </select>
+                              <input
+                                className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+                                type="number"
+                                min="0"
+                                value={trackSlaDraft}
+                                onChange={(event) => setTrackSlaDraft(event.target.value)}
+                                disabled={!canManageSla || savingSla}
+                                placeholder="SLA בדקות"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="rounded-xl"
+                                onClick={handleSaveSla}
+                                disabled={!canManageSla || savingSla}
+                              >
+                                {savingSla ? "שומר..." : "שמירת SLA"}
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : null}
+
+                    <Card dir="rtl" className="border-border/70 shadow-none">
+                      <CardHeader className="gap-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="space-y-1">
+                            <CardTitle className="text-xl">התקדמות המסלול</CardTitle>
+                            <CardDescription>
+                              כאן רואים את התקדמות המסלול בפועל, את אירועי המעבר ואת האפשרויות
+                              הזמינות מהשלב הנוכחי.
+                            </CardDescription>
+                          </div>
+                          <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background px-3 py-1 text-xs font-medium">
+                            <span
+                              className={[
+                                "size-2 rounded-full",
+                                realtimeStatus === "SUBSCRIBED"
+                                  ? "bg-red-500 shadow-[0_0_0_4px_rgba(239,68,68,0.12)]"
+                                  : realtimeStatus === "CONNECTING"
+                                    ? "bg-amber-500"
+                                    : "bg-muted-foreground/40",
+                              ].join(" ")}
+                            />
+                            <span>{getRealtimeStatusLabel(realtimeStatus)}</span>
+                          </div>
                         </div>
-                        <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background px-3 py-1 text-xs font-medium">
-                          <span
-                            className={[
-                              "size-2 rounded-full",
-                              realtimeStatus === "SUBSCRIBED"
-                                ? "bg-red-500 shadow-[0_0_0_4px_rgba(239,68,68,0.12)]"
-                                : realtimeStatus === "CONNECTING"
-                                  ? "bg-amber-500"
-                                  : "bg-muted-foreground/40",
-                            ].join(" ")}
-                          />
-                          <span>{getRealtimeStatusLabel(realtimeStatus)}</span>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <TrackStepper
-                        nodes={trackNodes}
-                        startNodeId={startNodeId}
-                        currentNodeId={track.currentNode?.id || track.currentStepKey}
-                        events={events}
-                        pendingTransitionId={pendingTransitionId}
-                        createdAt={track.createdAt}
-                        slaMode={track.slaMode}
-                        baseSlaMinutes={track.sla ?? track.trackType?.sla ?? null}
-                        onTransitionSelect={handleTransitionSelect}
-                      />
-                    </CardContent>
-                  </Card>
+                      </CardHeader>
+                      <CardContent>
+                        <TrackStepper
+                          nodes={trackNodes}
+                          startNodeId={startNodeId}
+                          currentNodeId={track.currentNode?.id || track.currentStepKey}
+                          events={events}
+                          pendingTransitionId={pendingTransitionId}
+                          createdAt={track.createdAt}
+                          slaMode={track.slaMode}
+                          baseSlaMinutes={track.sla ?? track.trackType?.sla ?? null}
+                          onTransitionSelect={handleTransitionSelect}
+                          activeEventVisitId={activeEventVisitId}
+                          customEventTitle={customEventTitle}
+                          customEventNote={customEventNote}
+                          savingCustomEvent={savingCustomEvent}
+                          onToggleEventComposer={(visitId) =>
+                            setActiveEventVisitId((current) => {
+                              const nextValue = current === visitId ? null : visitId
+                              if (current !== nextValue) {
+                                setCustomEventTitle("")
+                                setCustomEventNote("")
+                                setActiveEditEventId(null)
+                                setEditEventTitle("")
+                                setEditEventNote("")
+                              }
+                              return nextValue
+                            })
+                          }
+                          onCustomEventTitleChange={setCustomEventTitle}
+                          onCustomEventNoteChange={setCustomEventNote}
+                          onCreateCustomEvent={handleCreateCustomEvent}
+                          activeEditEventId={activeEditEventId}
+                          editEventTitle={editEventTitle}
+                          editEventNote={editEventNote}
+                          savingEditedEvent={savingEditedEvent}
+                          deletingEventId={deletingEventId}
+                          onStartEditEvent={handleStartEditEvent}
+                          onCancelEditEvent={handleCancelEditEvent}
+                          onEditEventTitleChange={setEditEventTitle}
+                          onEditEventNoteChange={setEditEventNote}
+                          onSaveEditedEvent={handleSaveEditedEvent}
+                          onDeleteEvent={handleDeleteEvent}
+                        />
+                      </CardContent>
+                    </Card>
+                  </div>
                 </PageMainContent>
 
                 <PageMainRail className="xl:order-1">
@@ -952,127 +1263,71 @@ export default function TrackPage() {
                           descriptionClassName="text-[11px]"
                           iconClassName="size-3"
                         />
-                        <Sheet>
-                          <SheetTrigger asChild>
-                            <button
-                              type="button"
-                              className="group relative w-full cursor-pointer text-right"
-                              aria-label={canManageSla ? "פתיחת ניהול SLA" : "צפייה ב-SLA"}
-                            >
-                              <InfoPanelStat
-                                icon={TimerReset}
-                                label="SLA נוכחי"
-                                value={effectiveTrackSlaLabel}
-                                description={
-                                  <div className="space-y-1">
-                                    <div>{effectiveTrackSlaDescription}</div>
-                                    <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-foreground/80 transition-colors group-hover:text-foreground">
-                                      <PencilLine className="size-3" />
-                                      <span>{canManageSla ? "לחצו לניהול SLA" : "לחצו לצפייה בפרטי SLA"}</span>
-                                    </div>
-                                  </div>
-                                }
-                                className="rounded-2xl border-primary/20 bg-primary/5 px-4 py-3.5 transition-all hover:border-primary/40 hover:bg-primary/10"
-                                labelClassName="text-[11px] text-primary/80"
-                                valueClassName="text-base leading-7"
-                                descriptionClassName="text-[11px]"
-                                iconClassName="size-3 text-primary/80"
-                              />
-                            </button>
-                          </SheetTrigger>
-                          <SheetContent side="left" className="w-full sm:max-w-lg">
-                            <SheetHeader>
-                              <SheetTitle>ניהול SLA</SheetTitle>
-                              <SheetDescription>
-                                כאן אפשר לראות ולעדכן את הגדרות ה-SLA של המסלול, בלי להפריע
-                                לעבודה על ההתקדמות עצמה.
-                              </SheetDescription>
-                            </SheetHeader>
-
-                            <div className="mt-6 space-y-5">
-                              <div className="grid gap-3 sm:grid-cols-2">
-                                <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
-                                  <div className="text-xs text-muted-foreground">מצב חישוב</div>
-                                  <div className="mt-2 text-sm font-medium">{slaModeLabel}</div>
-                                </div>
-                                <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
-                                  <div className="text-xs text-muted-foreground">SLA בסיסי</div>
-                                  <div className="mt-2 text-sm font-medium">
-                                    {formatMinutesLabel(track.sla ?? track.trackType?.sla ?? null)}
-                                  </div>
-                                </div>
-                                <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
-                                  <div className="text-xs text-muted-foreground">תוספות שנצברו</div>
-                                  <div className="mt-2 text-sm font-medium">
-                                    {formatMinutesLabel(slaSummary.modifierMinutes)}
-                                  </div>
-                                </div>
-                                <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
-                                  <div className="text-xs text-muted-foreground">SLA לשלב הנוכחי</div>
-                                  <div className="mt-2 text-sm font-medium">{currentNodeSlaLabel}</div>
+                        <button
+                          type="button"
+                          className="group relative w-full cursor-pointer text-right"
+                          aria-label={canManageSla ? "פתיחת ניהול SLA" : "צפייה ב-SLA"}
+                          onClick={() =>
+                            setActiveInlinePanel((current) => (current === "sla" ? null : "sla"))
+                          }
+                        >
+                          <InfoPanelStat
+                            icon={TimerReset}
+                            label="SLA נוכחי"
+                            value={effectiveTrackSlaLabel}
+                            description={
+                              <div className="space-y-1">
+                                <div>{effectiveTrackSlaDescription}</div>
+                                <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-950/70 transition-colors group-hover:text-emerald-950/90">
+                                  <PencilLine className="size-3" />
+                                  <span>{canManageSla ? "לחצו לניהול SLA" : "לחצו לצפייה בפרטי SLA"}</span>
                                 </div>
                               </div>
-
-                              <div className="space-y-3 rounded-2xl border border-border/60 bg-background/70 p-4">
-                                <div className="space-y-1">
-                                  <div className="text-sm font-medium">הגדרות מסלול</div>
-                                  <div className="text-sm text-muted-foreground">
-                                    {canManageSla
-                                      ? "אפשר לעדכן את מצב החישוב ואת ערך ה-SLA הבסיסי של המסלול."
-                                      : "אפשר לצפות בהגדרות ה-SLA, אך העריכה זמינה רק למנהלי נקודה וארגון."}
-                                  </div>
-                                </div>
-
-                                <div className="grid gap-3">
-                                  <select
-                                    className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
-                                    value={slaModeDraft}
-                                    onChange={(event) =>
-                                      setSlaModeDraft(event.target.value as "derived" | "manual")
-                                    }
-                                    disabled={!canManageSla || savingSla}
-                                  >
-                                    <option value="derived">נגזר · כולל תוספות של שלבים</option>
-                                    <option value="manual">ידני · בלי תוספות של שלבים</option>
-                                  </select>
-                                  <input
-                                    className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
-                                    type="number"
-                                    min="0"
-                                    value={trackSlaDraft}
-                                    onChange={(event) => setTrackSlaDraft(event.target.value)}
-                                    disabled={!canManageSla || savingSla}
-                                    placeholder="SLA בדקות"
-                                  />
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="rounded-xl"
-                                    onClick={handleSaveSla}
-                                    disabled={!canManageSla || savingSla}
-                                  >
-                                    {savingSla ? "שומר..." : "שמירת SLA"}
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          </SheetContent>
-                        </Sheet>
+                            }
+                            className="rounded-2xl border-primary/15 bg-primary/5 px-4 py-3.5 transition-all hover:border-primary/30 hover:bg-primary/10"
+                            labelClassName="text-[11px] text-emerald-950/70"
+                            valueClassName="text-base leading-7"
+                            descriptionClassName="text-[11px]"
+                            iconClassName="size-3 text-emerald-950/70"
+                          />
+                        </button>
                       </InfoPanelStats>
 
                       <InfoPanelSection
                         title="פרטי הרשומה"
-                        description="המידע שנאסף בעת פתיחת המסלול, מסודר לפי מקטעי הטופס."
+                        description="המידע שנאסף בעת פתיחת המסלול."
                         titleClassName="text-[13px]"
                         descriptionClassName="text-xs leading-5"
                         className="rounded-2xl bg-muted/15 p-4"
+                        action={
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 rounded-xl px-2.5 text-xs text-muted-foreground hover:text-foreground"
+                            onClick={() => setIsRecordDataOpen((current) => !current)}
+                          >
+                            <ChevronDown
+                              className={cn(
+                                "size-4 transition-transform",
+                                isRecordDataOpen && "rotate-180"
+                              )}
+                            />
+                            {isRecordDataOpen ? "הסתרה" : "הצגה"}
+                          </Button>
+                        }
                       >
-                        <TrackRecordData data={track.data} compact />
+                        {isRecordDataOpen ? (
+                          <TrackRecordData data={track.data} compact />
+                        ) : (
+                          <div className="text-sm leading-6 text-muted-foreground">
+                          </div>
+                        )}
                       </InfoPanelSection>
 
                       <InfoPanelSection
                         title="קישור ציבורי"
-                        description="שיתוף קישור מעקב ללקוח ללא כניסה למערכת."
+                        description="שיתוף קישור המעקב ללקוח."
                         titleClassName="text-[13px]"
                         descriptionClassName="text-xs leading-5"
                         className="rounded-2xl bg-muted/15 p-4"
@@ -1104,6 +1359,33 @@ export default function TrackPage() {
                           />
                         </InfoPanelDetailList>
                       </InfoPanelSection>
+
+                      {canManageTrack ? (
+                        <InfoPanelSection
+                          title="ניהול מסלול"
+                          description="שינוי שם המסלול, הערות או מחיקה."
+                          titleClassName="text-[13px]"
+                          descriptionClassName="text-xs leading-5"
+                          className="rounded-2xl bg-muted/15 p-4"
+                        >
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full rounded-xl"
+                            onClick={() =>
+                              navigate(
+                                `/${getOrganizationSegment(selectedOrganization!)}/${getPointSegment(track.point!)}/track/${getTrackSegment({
+                                  id: track.id,
+                                  name: track.name,
+                                })}/edit`
+                              )
+                            }
+                          >
+                            <PencilLine className="size-4" />
+                            ניהול המסלול
+                          </Button>
+                        </InfoPanelSection>
+                      ) : null}
                     </InfoPanelBody>
                   </InfoPanel>
                 </PageMainRail>
@@ -1121,4 +1403,3 @@ export default function TrackPage() {
     </SidebarProvider>
   )
 }
-

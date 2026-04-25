@@ -73,9 +73,37 @@ const ROLE_OPTIONS = [
 ]
 
 const MEMBER_PICKER_PAGE_SIZE = 24
+const ORGANIZATION_MEMBERS_FETCH_PAGE_SIZE = 1000
 
 const formatMemberName = (member: CandidateMember) =>
   member.profile?.display_name?.trim() || member.title?.trim() || "משתמש ארגוני"
+
+const getAllActiveOrganizationMembers = async (organizationId: number) => {
+  const collectedMembers: OrganizationMemberRow[] = []
+
+  for (let from = 0; ; from += ORGANIZATION_MEMBERS_FETCH_PAGE_SIZE) {
+    const to = from + ORGANIZATION_MEMBERS_FETCH_PAGE_SIZE - 1
+
+    const { data, error } = await supabase
+      .from("organization_users")
+      .select("organization_id, user_id, role, status, title")
+      .eq("organization_id", organizationId)
+      .eq("status", "active")
+      .order("user_id", { ascending: true })
+      .range(from, to)
+
+    if (error) throw error
+
+    const pageMembers = (data ?? []) as OrganizationMemberRow[]
+    collectedMembers.push(...pageMembers)
+
+    if (pageMembers.length < ORGANIZATION_MEMBERS_FETCH_PAGE_SIZE) {
+      break
+    }
+  }
+
+  return collectedMembers
+}
 
 export default function PointMemberCreatePage() {
   const { user } = useAuth()
@@ -178,7 +206,7 @@ export default function PointMemberCreatePage() {
         const [
           pointResult,
           pointMembersResult,
-          organizationMembersResult,
+          organizationMembers,
           orgPermissionResult,
           pointPermissionResult,
         ] = await Promise.all([
@@ -191,12 +219,7 @@ export default function PointMemberCreatePage() {
             .from("point_users")
             .select("point_id, user_id")
             .eq("point_id", pointIdFromRoute),
-          supabase
-            .from("organization_users")
-            .select("organization_id, user_id, role, status, title")
-            .eq("organization_id", selectedOrganization.id)
-            .eq("status", "active")
-            .order("user_id", { ascending: true }),
+          getAllActiveOrganizationMembers(selectedOrganization.id),
           supabase
             .from("organization_users")
             .select("role")
@@ -215,7 +238,6 @@ export default function PointMemberCreatePage() {
 
         if (pointResult.error) throw pointResult.error
         if (pointMembersResult.error) throw pointMembersResult.error
-        if (organizationMembersResult.error) throw organizationMembersResult.error
         if (orgPermissionResult.error) throw orgPermissionResult.error
         if (pointPermissionResult.error) throw pointPermissionResult.error
 
@@ -228,7 +250,6 @@ export default function PointMemberCreatePage() {
         const pointMemberIds = new Set(
           ((pointMembersResult.data ?? []) as PointMemberRow[]).map((member) => member.user_id)
         )
-        const organizationMembers = (organizationMembersResult.data ?? []) as OrganizationMemberRow[]
         const profilesById = await getProfilesByIdsCached(
           organizationMembers.map((member) => member.user_id)
         )
@@ -426,7 +447,7 @@ export default function PointMemberCreatePage() {
                     <InfoPanelHeader
                       icon={MapPinned}
                       title={point.name?.trim() || `נקודה #${point.id}`}
-                      description={point.notes?.trim() || "הוספת חבר קיים מהארגון לצוות הנקודה."}
+                      description={point.notes?.trim() || "הוספת חבר ארגון לצוות הנקודה."}
                       badge={<Badge variant={canManageTeam ? "default" : "outline"}>{canManageTeam ? "ניהול" : "קריאה בלבד"}</Badge>}
                     />
                     <InfoPanelBody>
@@ -452,7 +473,7 @@ export default function PointMemberCreatePage() {
                         הוספת חבר לנקודה
                       </CardTitle>
                       <CardDescription>
-                        חפשו חבר קיים מהארגון, בחרו אותו מהרשימה, והגדירו עבורו תפקיד וטייטל בנקודה.
+                        חפשו חבר ארגון, בחרו אותו מהרשימה והגדירו עבורו תפקיד בנקודה.
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-5">
@@ -460,7 +481,7 @@ export default function PointMemberCreatePage() {
                         <Alert variant="destructive">
                           <AlertTitle>אין הרשאה</AlertTitle>
                           <AlertDescription>
-                            רק בעלי ומנהלי הארגון, או מנהלי נקודה, יכולים להוסיף חברים לצוות הנקודה.
+                            רק מי שמנהל את הנקודה או את הארגון יכול להוסיף חברים לנקודה.
                           </AlertDescription>
                         </Alert>
                       ) : null}

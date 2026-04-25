@@ -369,7 +369,7 @@ export default function SearchPage() {
                       title={selectedOrganization?.name?.trim() || "חיפוש ארגוני"}
                       description={
                         selectedOrganization?.notes?.trim() ||
-                        "חיפוש רוחבי בתוך מסלולי הארגון, כולל נתוני טופס ששויכו לרשומות."
+                        "חיפוש במסלולי הארגון ובמידע שנשמר בהם."
                       }
                       badge={
                         <Badge variant="outline" className="rounded-full">
@@ -383,20 +383,20 @@ export default function SearchPage() {
                           icon={Target}
                           label="שאילתה"
                           value={debouncedQuery || "—"}
-                          description="מופעל אחרי שני תווים ומעלה."
+                          description="החיפוש מתחיל משני תווים."
                         />
                         <InfoPanelStat
                           icon={Route}
                           label="תוצאות"
                           value={loadingResults ? "..." : results.length}
-                          description="שילוב בין אינדקס ייעודי לבין חיפוש ישיר לשדות בסיסיים."
+                          description="כולל אינדקס ייעודי וחיפוש ישיר."
                         />
                       </InfoPanelStats>
 
                       <InfoPanelSection
                         icon={DatabaseZap}
                         title="מה כלול בחיפוש?"
-                        description="החיפוש סורק גם מידע אינדקסי וגם שדות ליבה של המסלול."
+                        description="החיפוש בודק גם מידע שנוסף לאינדקס וגם שדות בסיסיים."
                       >
                         <InfoPanelDetailList>
                           <InfoPanelDetail label="אינדקס" value="שם מסלול, מספר ייחוס, נתוני טופס ושדות שמורים" />
@@ -424,7 +424,7 @@ export default function SearchPage() {
                         חיפוש מסלולים
                       </CardTitle>
                       <CardDescription>
-                        חפשו לפי שם מסלול, מספר ייחוס, פרטי טופס שמורים, הערות או סוג מסלול.
+                        חפשו לפי שם, מספר ייחוס, פרטי טופס, הערות או סוג מסלול.
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
@@ -434,8 +434,7 @@ export default function SearchPage() {
                         placeholder="חפשו לפי שם, לקוח, טלפון, דגם, מספר ייחוס או כל שדה שמור..."
                       />
                       <div className="text-xs text-muted-foreground">
-                        החיפוש משתמש תחילה באינדקס הייעודי, ובמידת הצורך מבצע גם חיפוש ישיר בשדות
-                        הבסיס של רשומות המסלול כדי לצמצם מצבים של תוצאה חסרה.
+                        החיפוש משתמש תחילה באינדקס, ובמידת הצורך בודק גם את שדות הבסיס של הרשומה.
                       </div>
                     </CardContent>
                   </Card>

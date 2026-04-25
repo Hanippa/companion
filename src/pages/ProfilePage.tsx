@@ -181,7 +181,7 @@ export default function ProfilePage() {
                   <InfoPanelHeader
                     icon={UserRoundIcon}
                     title={displayName.trim() || profile?.display_name || "משתמש"}
-                    description="המידע כאן מוצג ברחבי המערכת, כולל ברשימות צוות, היסטוריית אירועים וממשק הניווט."
+                    description="הפרטים כאן מוצגים ברחבי המערכת."
                   />
                   <InfoPanelBody>
                     <div className="flex flex-col items-center gap-4 rounded-2xl border border-border/60 bg-muted/20 px-4 py-5">
@@ -272,7 +272,7 @@ export default function ProfilePage() {
                     <Alert>
                       <AlertTitle>טיפ</AlertTitle>
                       <AlertDescription>
-                        תמונת פרופיל ושם תצוגה ברורים עוזרים לזהות מי קידם מסלול, מי שייך לצוות, ומי מופיע בעמודי המעקב הציבוריים.
+                        שם ברור ותמונת פרופיל עדכנית מקלים על זיהוי המשתמש בכל רחבי המערכת.
                       </AlertDescription>
                     </Alert>
 
