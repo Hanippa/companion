@@ -34,7 +34,9 @@ export function LoginForm({
   ...props
 }: React.ComponentProps<"div">) {
   const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
   const [loadingStatus, setLoadingStatus] = useState(false)
+  const [passwordLoadingStatus, setPasswordLoadingStatus] = useState(false)
   const [feedback, setFeedback] = useState<LoginFeedback>({
     type: "idle",
     title: "התחברות מאובטחת",
@@ -75,6 +77,43 @@ export function LoginForm({
       description: "נשלח אליכם קישור כניסה לכתובת שהזנתם. בדקו גם את תיקיית הספאם.",
     })
     setLoadingStatus(false)
+  }
+
+  const handlePasswordLogin = async (event: React.FormEvent) => {
+    event.preventDefault()
+
+    if (passwordLoadingStatus) {
+      return
+    }
+
+    setFeedback({
+      type: "loading",
+      title: "כניסה עם סיסמה",
+      description: "בודקים את האימייל והסיסמה שלכם.",
+    })
+    setPasswordLoadingStatus(true)
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (error) {
+      setFeedback({
+        type: "error",
+        title: "הכניסה עם סיסמה נכשלה",
+        description: error.message,
+      })
+      setPasswordLoadingStatus(false)
+      return
+    }
+
+    setFeedback({
+      type: "success",
+      title: "התחברתם בהצלחה",
+      description: "אתם מחוברים עכשיו.",
+    })
+    setPasswordLoadingStatus(false)
   }
 
   const feedbackIcon =
@@ -162,6 +201,26 @@ export function LoginForm({
               </Field>
             </FieldGroup>
           </form>
+          <details className="mt-3 text-sm text-muted-foreground">
+            <summary className="cursor-pointer text-center">כניסה עם סיסמה</summary>
+            <form className="mt-3 flex flex-col gap-3" onSubmit={handlePasswordLogin}>
+              <Input
+                type="password"
+                placeholder="סיסמה"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete="current-password"
+                required
+              />
+              <Button
+                type="submit"
+                variant="outline"
+                disabled={passwordLoadingStatus || loadingStatus}
+              >
+                {passwordLoadingStatus ? <Spinner /> : "התחברות עם סיסמה"}
+              </Button>
+            </form>
+          </details>
         </CardContent>
       </Card>
       <FieldDescription className="px-6 text-center">
